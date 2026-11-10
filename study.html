@@ -249,7 +249,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 16:23";
+const BUILD = "2026-11-10 16:30";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -541,7 +541,7 @@ function drawPlot(ctx, W, H, spec, opt = {}) {
     ctx.stroke();
   }
   if (spec.playhead != null && isFinite(spec.playhead)) {
-    ctx.strokeStyle = "rgba(11,92,173,.85)"; ctx.lineWidth = 1.6 * fs; ctx.setLineDash([]);
+    ctx.strokeStyle = spec.playheadColor || "rgba(11,92,173,.85)"; ctx.lineWidth = 1.8 * fs; ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(X(spec.playhead), pad.t); ctx.lineTo(X(spec.playhead), pad.t + ph); ctx.stroke();
   }
   ctx.restore(); ctx.setLineDash([]);
@@ -571,7 +571,7 @@ function attachPlot(canvas, readout, getSpec, figKey, meanEl, getHead) {
     if (!W || !H) return;
     if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
     const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const spec = getSpec(true); spec.view = VIEW[figKey()] || null; spec.playhead = getHead ? getHead() : null;
+    const spec = getSpec(true); spec.view = VIEW[figKey()] || null; const hd = getHead ? getHead() : null; spec.playhead = hd ? hd.t : null; spec.playheadColor = hd ? hd.c : null;
     st.geo = drawPlot(ctx, W, H, spec); st.spec = spec;
     if (meanEl) {
       const v = VIEW[figKey()];
@@ -735,7 +735,12 @@ function makeAnim(key, o) {
     q("src").innerHTML = L.map(x => `<option value="${x.id}"${x.id === A.sel ? " selected" : ""}>${x.label}</option>`).join("") || `<option>no curve yet</option>`;
   };
   A.play = id => { A.refresh(); A.sel = id; A.refresh(); A.t = 0; A.playing = true; };
-  A.head = () => { const r = A.current(); return r && (A.playing || A.t > 0 || A.live()) ? A.t : null; };
+  A.head = () => { const r = A.current(); return r && (A.playing || A.t > 0 || A.live()) ? {t: A.t, c: A.color()} : null; };
+  A.color = () => {                                   // same colour as the animated curve on the plot
+    const live = A.live(), L = A.list(), src = live ? L.find(x => x.run === live) : (L.find(x => x.id === A.sel) || L[L.length - 1]);
+    if (!src) return null;
+    return src.id === "preview" ? "#222" : COLORS[src.id % COLORS.length];
+  };
   A.plot = () => A.plotRender && A.plotRender();
   A.ui = () => { q("play").textContent = A.playing ? "❚❚ Pause" : "▶ Play"; q("play").disabled = q("rew").disabled = !!A.live(); };
   A.refresh(); ANIM[key] = A; return A;
