@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EE104 Lab 4 · PID Control</title>
+<style>
+  :root { --bg: #f4f5f7; --card: #fff; --ink: #1d232b; --muted: #5d6773; --line: #d9dde3; --accent: #0b5cad; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+  header { background: #102a43; color: #fff; padding: 22px 20px; }
+  header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+  header p { margin: 4px 0 0; opacity: .8; }
+  main { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  a.card { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; color: inherit; text-decoration: none; }
+  a.card:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(11, 92, 173, .12); }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin-bottom: 8px; }
+  .study { background: #f0b429; color: #102a43; } .lab { background: #62b0ff; color: #102a43; }
+  a.card h2 { margin: 0 0 6px; font-size: 19px; color: var(--accent); }
+  a.card ul { margin: 6px 0 0 18px; padding: 0; color: var(--muted); font-size: 14px; }
+  .note { margin-top: 22px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EE104 Lab 4: Investigating PID Control</h1>
+  <p>Simulation and Arduino-based control of the balance beam and the ball-in-a-tube</p>
+</header>
+<main>
+  <div class="cards">
+    <a class="card" href="study.html">
+      <span class="tag study">Study edition</span>
+      <h2>Prepare at home</h2>
+      <ul>
+        <li>PID simulation of several systems, with live sliders and pole map</li>
+        <li>Self-test questions with feedback</li>
+        <li>Emulated rigs to rehearse the lab procedure</li>
+      </ul>
+    </a>
+    <a class="card" href="lab.html">
+      <span class="tag lab">Lab edition</span>
+      <h2>Lab session</h2>
+      <ul>
+        <li>Ex.1 simulation and Ex.2/Ex.3 on the real rigs (Arduino Nano)</li>
+        <li>Step-by-step tasks</li>
+        <li>Report with your figures and answers (print or save as PDF)</li>
+      </ul>
+    </a>
+  </div>
+  <p class="note">Use Google Chrome or Microsoft Edge: other browsers cannot connect to the Arduino. Your data stay in your browser; nothing is uploaded.</p>
+</main>
+</body>
+</html>

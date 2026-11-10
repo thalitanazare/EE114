@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- EE104 Lab 4 interface, lab edition. Generated from interface/src/lab4.html: edit the source, not this file. -->
+<title>EE104 Lab 4 · PID Control</title>
+<style>
+:root {
+  --bg: #f4f5f7; --card: #ffffff; --ink: #1d232b; --muted: #5d6773; --line: #d9dde3;
+  --accent: #0b5cad; --accent-ink: #ffffff; --good: #137a3f; --bad: #b42318; --warn: #9a5b00;
+  --chip: #eef3fa;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+header { background: #102a43; color: #fff; padding: 10px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+header h1 small { font-weight: 400; opacity: .75; margin-left: 6px; }
+.edition { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; background: #f0b429; color: #102a43; margin-left: 8px; vertical-align: 2px; }
+.edition.lab { background: #62b0ff; }
+.conn { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.conn .status { font-size: 13px; padding: 3px 10px; border-radius: 12px; background: #334e68; }
+.conn .status.good { background: var(--good); } .conn .status.bad { background: var(--bad); } .conn .status.warn { background: var(--warn); }
+nav { display: flex; gap: 2px; padding: 0 20px; background: #243b53; flex-wrap: wrap; }
+nav button { background: none; border: 0; color: #d9e2ec; padding: 10px 16px; font: inherit; cursor: pointer; border-bottom: 3px solid transparent; }
+nav button.on { color: #fff; border-bottom-color: #62b0ff; font-weight: 600; }
+main { max-width: 1280px; margin: 0 auto; padding: 18px 20px 60px; }
+section.tab { display: none; } section.tab.on { display: block; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+.card h2 { font-size: 16px; margin: 0 0 8px; } .card h3 { font-size: 14px; margin: 12px 0 6px; }
+.grid { display: grid; grid-template-columns: 350px 1fr; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+label.f { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; font-size: 14px; }
+label.f span.u { color: var(--muted); font-size: 12px; min-width: 44px; }
+input[type=number], input[type=text], input[type=date], select, textarea { font: inherit; padding: 4px 6px; border: 1px solid #b8c0cc; border-radius: 4px; background: #fff; color: var(--ink); }
+input[type=number] { width: 92px; text-align: right; }
+select.wide { width: 100%; }
+textarea { width: 100%; min-height: 70px; resize: vertical; }
+.gain { display: grid; grid-template-columns: 22px 1fr 92px; align-items: center; gap: 8px; margin: 7px 0; font-size: 15px; font-weight: 600; }
+.gain input[type=range] { width: 100%; accent-color: var(--accent); }
+.gain input:disabled { opacity: .5; }
+button.b { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 5px; border: 1px solid #b8c0cc; background: #fff; color: var(--ink); cursor: pointer; }
+button.b:hover { background: #f0f3f7; }
+button.b.p { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.b.p:hover { background: #094b8e; }
+button.b.stop { background: var(--bad); color: #fff; border-color: var(--bad); font-weight: 600; }
+button.b:disabled { opacity: .45; cursor: default; }
+header button.b { padding: 4px 10px; font-size: 13px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.chip { font-size: 13px; padding: 3px 10px; border-radius: 12px; background: var(--chip); border: 1px solid #c9d7ea; cursor: pointer; color: var(--accent); }
+.chip:hover { background: #dde8f6; }
+.subtabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.subtabs button { font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--line); background: #f7f8fa; border-radius: 5px; cursor: pointer; color: var(--ink); }
+.subtabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.subtabs button .n { opacity: .7; margin-left: 4px; }
+.plotwrap { position: relative; width: 100%; height: 430px; }
+.plotwrap canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+.readout { font: 12px/1.4 Consolas, "Courier New", monospace; color: var(--muted); min-height: 18px; margin-top: 4px; white-space: pre-wrap; }
+table.runs { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+table.runs th, table.runs td { text-align: right; padding: 4px 6px; border-bottom: 1px solid #edf0f3; }
+table.runs th:first-child, table.runs td:first-child, table.runs td:nth-child(2), table.runs th:nth-child(2) { text-align: left; }
+table.runs .sw { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.x { border: 0; background: none; color: var(--bad); cursor: pointer; font-size: 15px; }
+.hint { color: var(--muted); font-size: 13px; margin: 4px 0; }
+.note { background: #fff8e6; border: 1px solid #f0d28a; border-radius: 6px; padding: 8px 10px; font-size: 13px; margin: 8px 0; }
+.metrics { background: #f3f7fc; border: 1px solid #d3e1f2; border-radius: 6px; padding: 7px 10px; font-size: 13px; margin: 8px 0; }
+.big { font: 600 34px/1.1 Consolas, "Courier New", monospace; margin: 6px 0; }
+.phase { font-size: 13px; color: var(--muted); }
+details.log summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+pre.log { max-height: 180px; overflow: auto; background: #0f1720; color: #cde; font-size: 12px; padding: 8px; border-radius: 6px; margin: 6px 0 0; }
+.steps { margin: 4px 0 0 18px; padding: 0; } .steps li { margin: 3px 0; }
+.q { margin: 10px 0 14px; } .q p { margin: 0 0 4px; font-weight: 600; font-size: 14px; }
+.figthumb { width: 100%; max-width: 860px; border: 1px solid var(--line); border-radius: 4px; }
+.flag { font-size: 12px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; }
+.flag.ok { background: #e3f4ea; color: var(--good); } .flag.no { background: #fde8e6; color: var(--bad); } .flag.emu { background: #fff1d6; color: var(--warn); }
+
+.steplist { list-style: none; margin: 6px 0; padding: 0; }
+.steplist li { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 8px; padding: 6px 8px; margin: 4px 0; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; background: #fafbfc; }
+.steplist li .n { width: 22px; height: 22px; border-radius: 50%; background: #d9dde3; color: #333; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.steplist li.next { border-color: var(--accent); background: #eef4fb; }
+.steplist li.next .n { background: var(--accent); color: #fff; }
+.steplist li.done .n { background: var(--good); color: #fff; }
+.steplist li.done .g { color: var(--muted); }
+.steplist button { font-size: 13px; padding: 4px 10px; }
+.stepintro { font-size: 13px; margin: 2px 0 6px; }
+.theory { font: 12.5px/1.55 Consolas, "Courier New", monospace; background: #f7f8fa; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; overflow-x: auto; }
+.theory b { font-weight: 700; } .theory .st { color: var(--good); font-weight: 700; } .theory .un { color: var(--bad); font-weight: 700; }
+canvas.pz { width: 100%; height: 190px; border: 1px solid var(--line); border-radius: 6px; margin-top: 6px; display: block; background: #fff; }
+.readout.mean { color: #1d3d63; }
+#print { display: none; }
+@media print {
+  body { background: #fff; }
+  header, nav, main { display: none !important; }
+  #print { display: block; font: 11pt/1.4 "Segoe UI", Arial, sans-serif; color: #000; }
+  #print h1 { font-size: 16pt; margin: 0 0 4pt; } #print h2 { font-size: 13pt; margin: 14pt 0 4pt; border-bottom: 1px solid #000; }
+  #print h3 { font-size: 11pt; margin: 10pt 0 4pt; }
+  #print img { width: 100%; max-height: 9cm; object-fit: contain; page-break-inside: avoid; }
+  #print .ans { border: 1px solid #999; padding: 5pt 7pt; min-height: 1.6cm; white-space: pre-wrap; margin-bottom: 8pt; }
+  #print .fig { page-break-inside: avoid; }
+  @page { size: A4; margin: 15mm; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>EE104 Lab 4 <small>Investigating PID Control</small><span class="edition" id="edition"></span></h1>
+  <div class="conn">
+    <span class="status" id="status">Not connected</span>
+    <button class="b" id="btnConnect">Connect to Arduino</button>
+    
+    <button class="b" id="btnDisconnect" disabled>Disconnect</button>
+  </div>
+</header>
+<nav id="nav">
+  <button data-tab="home" class="on">Start</button>
+  <button data-tab="ex1">Ex.1 Simulation</button>
+  <button data-tab="ex2">Ex.2 Balance beam</button>
+  <button data-tab="ex3">Ex.3 Ball in a tube</button>
+  
+  <button data-tab="report">Report</button>
+</nav>
+
+<main>
+<!-- ======================================================== START -->
+<section class="tab on" id="tab-home">
+  
+  <div class="card">
+    <h2>Lab edition · how this lab works</h2>
+    <p>This page replaces Simulink and MATLAB for Lab 4. It simulates the mass-spring-damper system (Ex.1) and runs the PID controller on the Arduino Nano of the balance-beam (Ex.2) and ball-in-a-tube (Ex.3) rigs. The PID loop itself runs on the Nano every 0.1 s, and this page sends it the gains and the setpoint and plots what the Nano measures.</p>
+    <ol class="steps">
+      <li>Use <b>Google Chrome</b> or <b>Microsoft Edge</b>. Other browsers cannot talk to the serial port.</li>
+      <li>Ex.1 needs no hardware: open <b>Ex.1 Simulation</b> and start.</li>
+      <li>For Ex.2 and Ex.3, connect the Nano by USB, switch on the 5 V bench supply, and press <b>Connect to Arduino</b>. In the list, choose the Nano's COM port (often <i>USB-SERIAL CH340</i>).</li>
+      <li>Set the gains with the sliders or type the values. Every run is added to the current figure, like <code>hold on</code> in MATLAB. Each figure in the sub-tabs matches one plot of the answer sheet.</li>
+      <li>Write your comments in the <b>Report</b> tab and press <b>Print / Save as PDF</b>. The figures are inserted automatically.</li>
+    </ol>
+    <p class="hint">Your runs and answers are kept in this browser until you press "Clear everything" in the Report tab.</p>
+  </div>
+  
+  
+  <div class="card">
+    <h2>Connection log</h2>
+    <details class="log"><summary>Show serial messages</summary><pre class="log" id="log"></pre></details>
+    <p class="hint" id="fwinfo"></p>
+  </div>
+</section>
+
+<!-- ======================================================== EX.1 -->
+<section class="tab" id="tab-ex1">
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Ex.1 · Simulation</h2>
+        
+        <p class="hint" id="sDesc"></p>
+        <div id="sPars"></div>
+        <h3>Controller</h3>
+        <div id="sGains"></div>
+        <label class="f">Stop time <span><input type="number" id="sT" value="40" step="1"> <span class="u">s</span></span></label>
+        
+        <h3>Closed loop for the current sliders</h3>
+        <div class="theory" id="sTheory"></div>
+        <canvas id="pz" class="pz"></canvas>
+        <p class="hint">Pole map: × closed-loop poles, ○ zeros. Shaded left half-plane = stable. Ideal derivative assumed (the simulation filters it with N = 100).</p>
+        <div class="row"><button class="b p" id="sRun">Add to figure</button></div>
+        <p class="hint">The dotted curve shows the current settings. "Add to figure" keeps it.</p>
+        
+        <h3 id="sStepsH">Steps</h3>
+        <p class="stepintro hint" id="sStepsIntro"></p>
+        <ol class="steplist" id="sSteps"></ol>
+        
+      </div>
+    </div>
+    <div class="card">
+      <div class="subtabs" id="sub1"></div>
+      <div class="row" style="margin-top:0"><span class="hint">Plot:</span>
+        <select id="sShow"><option value="y">Output y(t) and input</option><option value="e">Error e(t)</option><option value="u">Controller output u(t)</option></select></div>
+      <div class="plotwrap"><canvas id="cv1"></canvas></div>
+      <div class="readout" id="ro1">Hover over the plot to read values · drag to zoom · double-click to reset zoom</div>
+      <div class="readout mean" id="ro1m"></div>
+      <div class="row">
+        <button class="b" data-act="png">Save PNG</button><button class="b" data-act="copy">Copy image</button>
+        <button class="b" data-act="csv">Save CSV</button><button class="b" data-act="zoom">Reset zoom</button>
+        <button class="b" data-act="clear">Clear figure</button>
+      </div>
+      <table class="runs" id="tb1"></table>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================== EX.2 / EX.3 (built by code) -->
+<section class="tab" id="tab-ex2"></section>
+<section class="tab" id="tab-ex3"></section>
+
+
+
+
+<!-- ======================================================== REPORT -->
+<section class="tab" id="tab-report">
+  <div class="card">
+    <h2>Lab 4 report</h2>
+    <div class="row">
+      <label>Names <input type="text" id="rNames" size="50" placeholder="Student names and IDs"></label>
+      <label>Date <input type="date" id="rDate"></label>
+    </div>
+    <div class="row">
+      <button class="b p" id="rPrint">Print / Save as PDF</button>
+      <button class="b" id="rCsv">Save all data (CSV)</button>
+      <button class="b" id="rReset">Clear everything</button>
+    </div>
+    <p class="hint">In the print dialogue, choose "Save as PDF" to get a file to submit, or print it directly.</p>
+  </div>
+  <div id="rBody"></div>
+</section>
+
+</main>
+
+<div id="print"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Edition
+   ===================================================================== */
+const EDITION = "lab";                 // replaced by the build: "lab" or "study"
+const ED = EDITION.startsWith("__") ? "dev" : EDITION;
+const STUDY = ED !== "lab", LAB = ED !== "study";
+const STORE = "ee104-lab4-" + ED + "-v2";
+const $ = id => document.getElementById(id);
+$("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED];
+$("edition").className = "edition " + (ED === "lab" ? "lab" : "");
+let onDataChanged = () => {};                  // the report hooks in here (lab edition)
+
+/* =====================================================================
+   Constants, plants, figure definitions and stored state
+   ===================================================================== */
+const T = 0.1;                       // Nano sample period (s)
+const COLORS = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#6a3d9a", "#444444"];
+
+/* plants for Ex.1: n states, derivative d(x,u,q), output y(x) */
+const PLANTS = {
+  msd:   {name: "Mass-spring-damper  1/(Ms² + Bs + K)", pars: [["M", 1, "mass"], ["B", 1, "damping"], ["K", 1, "spring"]], n: 2,
+          d: (x, u, q) => [x[1], (u - q.B * x[1] - q.K * x[0]) / q.M], y: x => x[0]},
+  
+};
+const PSYM = {tau: "τ", wn: "ωn", zeta: "ζ"};
+const psym = k => PSYM[k] || k;
+
+const FIGS = {};
+
+Object.assign(FIGS, {
+  f1a: {ex: 1, short: "1(a) Effect of P", title: "Ex.1 - Effect of P (I = 0, D = 0)", sim: true,
+        intro: "M = K = B = 1, stop time 40 s. Run the steps one at a time and look at the plot after each one before going on.",
+        lab: [{P: 1, I: 0, D: 0}, {P: 2, I: 0, D: 0}, {P: 5, I: 0, D: 0}]},
+  f1b: {ex: 1, short: "1(b) Large P", title: "Ex.1 - Large proportional gain (I = 0, D = 0)", sim: true,
+        intro: "Run each step, then hover over the end of the curve (zoom in if necessary) and note the exact steady-state value.",
+        lab: [{P: 100, I: 0, D: 0}, {P: 500, I: 0, D: 0}]},
+  f1c: {ex: 1, short: "1(c) Effect of I", title: "Ex.1 - Effect of I (P = 2, D = 0)", sim: true,
+        intro: "P = 2 and D = 0 throughout; only I changes. Compare each curve with figure 1(a).",
+        lab: [{P: 2, I: 0.5, D: 0}, {P: 2, I: 1, D: 0}, {P: 2, I: 2, D: 0}]},
+  f1d: {ex: 1, short: "1(d) Effect of D", title: "Ex.1 - Effect of D (P = 2, I = 1)", sim: true,
+        intro: "P = 2 and I = 1 throughout; only D changes.",
+        lab: [{P: 2, I: 1, D: 0.25}, {P: 2, I: 1, D: 0.5}, {P: 2, I: 1, D: 1}]},
+  f1e: {ex: 1, short: "1(e) Stability", title: "Ex.1 - Stability limit (P = 2, D = 0)", sim: true,
+        intro: "P = 2 and D = 0; only I changes. After each step, look at the response and at the pole map, and compare with your pre-lab Routh analysis.",
+        lab: [{P: 2, I: 2.5, D: 0}, {P: 2, I: 3, D: 0}, {P: 2, I: 3.5, D: 0}]},
+  f1f: {ex: 1, short: "1(f) Design", title: "Ex.1 - PID design", sim: true,
+        intro: "Design task: choose P, I and D yourself with the sliders so that the specification in the lab sheet is met. Add your final design to this figure (earlier attempts may stay).",
+        lab: []},
+});
+
+
+Object.assign(FIGS, {
+  f2a: {ex: 2, rig: "beam", short: "2(a) P only", title: "Ex.2 - Balance beam, P control", intro: "Set the SETPOINT first (Step 2) and a run time of 100 s. Switch on the 5 V supply, then run each step and watch the error.",
+        lab: [{P: 3, I: 0, D: 0}, {P: 4, I: 0, D: 0}]},
+  f2b: {ex: 2, rig: "beam", short: "2(b) PI", title: "Ex.2 - Balance beam, PI control", intro: "Same SETPOINT and run time as figure 2(a). Run each step and watch the error.",
+        lab: [{P: 3, I: 0.1, D: 0}, {P: 3, I: 0.2, D: 0}]},
+  f3:  {ex: 3, rig: "ball", short: "3 P and PI", title: "Ex.3 - Ball in a tube, P and PI control",
+        intro: "Setpoint 10 cm, run time 30 s. Switch on the 5 V supply, then run the steps in order and watch the error.",
+        lab: [{P: 7, I: 0, D: 0}, {P: 7, I: 0.5, D: 0}, {P: 1, I: 0.5, D: 0}]},
+});
+const ex1Figs = Object.keys(FIGS).filter(k => FIGS[k].sim);
+const RIGS = {
+  beam: {name: "Balance beam", tab: "ex2", figs: ["f2a", "f2b"], unit: "ADC counts", pvName: "Beam position", dur: 100,
+         sp: 512, spHint: "The level-beam reading (SETPOINT) should be between 400 and 600.", max: [20, 2, 5]},
+  ball: {name: "Ball in a tube", tab: "ex3", figs: ["f3"], unit: "cm", pvName: "Ball distance from the top", dur: 30,
+         sp: 10, spHint: "Setpoint 10 cm, i.e. about 10 cm below the top of the tube.", max: [20, 5, 5]},
+};
+const GMAX1 = [1000, 20, 10];       // Ex.1 slider ranges for P, I, D
+
+let S = {figs: {}, report: {names: "", date: "", answers: {}}, sp: {beam: 512, ball: 10}, beamSPmeasured: null, aw: true, st: {}};
+for (const id in FIGS) S.figs[id] = {runs: []};
+const VIEW = {};          // zoom window per figure (not stored)
+const SEL = {ex1: ex1Figs[0], beam: "f2a", ball: "f3"};
+const SHOW = {ex1: "y", beam: "err", ball: "err"};
+let PREVIEW = null;       // live Ex.1 curve that follows the sliders
+
+function save() {
+  try {
+    const out = JSON.parse(JSON.stringify(S, (k, v) => (k === "t" || k === "y" || k === "u") && Array.isArray(v) && v.length > 2000 ? undefined : v));
+    for (const id in out.figs) out.figs[id].runs = out.figs[id].runs.map(r => r.type === "sim" ? {type: "sim", p: r.p} : r);
+    localStorage.setItem(STORE, JSON.stringify(out));
+  } catch (e) { /* storage unavailable or full: data stay in memory */ }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE); if (!raw) return;
+    const st = JSON.parse(raw);
+    for (const id in FIGS) if (st.figs && st.figs[id]) st.figs[id].runs = st.figs[id].runs.filter(r => r.type !== "sim" || PLANTS[r.p.sys]).map(r => r.type === "sim" ? simRun(r.p) : r);
+    for (const id in st.figs || {}) if (!FIGS[id]) delete st.figs[id];
+    S = Object.assign(S, st);
+    for (const id in FIGS) if (!S.figs[id]) S.figs[id] = {runs: []};
+  } catch (e) { }
+}
+
+/* =====================================================================
+   Gain sliders (logarithmic, snapped to 2 significant figures)
+   ===================================================================== */
+const snap = v => v <= 0 ? 0 : Number(v.toPrecision(2));
+const pos2val = (pos, max) => pos <= 0 ? 0 : snap(Math.pow(10, Math.log10(max) - 3 + 3 * pos / 1000));
+const val2pos = (v, max) => v <= 0 ? 0 : Math.max(1, Math.min(1000, Math.round((Math.log10(v) - Math.log10(max) + 3) / 3 * 1000)));
+function gainsHTML(pre, max) {
+  return ["P", "I", "D"].map((g, j) => `<div class="gain"><span>${g}</span><input type="range" id="${pre}${g}R" min="0" max="1000" step="1" title="${g} (0 to ${max[j]}, logarithmic)"><input type="number" id="${pre}${g}" min="0" step="any"></div>`).join("");
+}
+function wireGains(pre, max, onChange) {
+  ["P", "I", "D"].forEach((g, j) => {
+    const r = $(pre + g + "R"), n = $(pre + g);
+    r.oninput = () => { n.value = pos2val(+r.value, max[j]); onChange(g); };
+    n.oninput = () => { r.value = val2pos(+n.value, max[j]); onChange(g); };
+  });
+}
+function setGains(pre, max, g) {
+  ["P", "I", "D"].forEach((k, j) => { if (g[k] !== undefined) { $(pre + k).value = g[k]; $(pre + k + "R").value = val2pos(+g[k], max[j]); } });
+}
+const readGains = pre => ({P: +$(pre + "P").value || 0, I: +$(pre + "I").value || 0, D: +$(pre + "D").value || 0});
+
+/* =====================================================================
+   Ex.1 simulation: PID (filtered derivative, N = 100) + plant, RK4, h = 0.01 s
+   ===================================================================== */
+function simulate(p) {
+  const pl = PLANTS[p.sys], q = p.pp, {P, I, D} = p, N = 100, h = 0.01, n = Math.round(p.tEnd / h), m = pl.n;
+  const nd = pl.delay ? Math.round(q.L / h) : 0, ubuf = [];
+  const ctl = s => { const e = 1 - pl.y(s); return P * e + I * s[m] + D * N * (e - s[m + 1]); };
+  const f = (s, ud) => {
+    const e = 1 - pl.y(s), u = P * e + I * s[m] + D * N * (e - s[m + 1]);
+    return pl.d(s, pl.delay ? ud : u, q).concat([e, N * (e - s[m + 1])]);
+  };
+  let s = new Array(m + 2).fill(0);
+  const t = new Float64Array(n + 1), y = new Float64Array(n + 1), u = new Float64Array(n + 1);
+  for (let k = 0; k <= n; k++) {
+    const uk = ctl(s); t[k] = k * h; y[k] = pl.y(s); u[k] = uk;
+    if (k === n) break;
+    ubuf.push(uk); const ud = pl.delay ? (k >= nd ? ubuf[k - nd] : 0) : uk;
+    const k1 = f(s, ud), k2 = f(s.map((v, i) => v + h / 2 * k1[i]), ud), k3 = f(s.map((v, i) => v + h / 2 * k2[i]), ud), k4 = f(s.map((v, i) => v + h * k3[i]), ud);
+    s = s.map((v, i) => v + h / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
+    if (!isFinite(s[0]) || Math.abs(pl.y(s)) > 1e6) return {t: t.slice(0, k + 1), y: y.slice(0, k + 1), u: u.slice(0, k + 1), unstable: true};
+  }
+  return {t, y, u, unstable: false};
+}
+function simRun(p) {
+  const r = simulate(p), y = r.y, n = y.length, fin = y[n - 1];
+  let pk = -Infinity; for (const v of y) pk = Math.max(pk, v);
+  let ts = 0; for (let k = n - 1; k >= 0; k--) if (Math.abs(y[k] - fin) > 0.02 * Math.abs(fin || 1)) { ts = r.t[Math.min(k + 1, n - 1)]; break; }
+  // sustained or growing oscillation: compare the swing in the last two quarters of the run
+  const q = Math.floor(n / 4), sw = a => { let lo = Infinity, hi = -Infinity; for (const v of a) { lo = Math.min(lo, v); hi = Math.max(hi, v); } return hi - lo; };
+  const s3 = sw(y.slice(2 * q, 3 * q)), s4 = sw(y.slice(3 * q));
+  const unstable = r.unstable || (s4 > 0.05 && s4 >= 0.98 * s3);
+  return {type: "sim", p, t: Array.from(r.t), y: Array.from(y), u: Array.from(r.u), unstable,
+          m: {fin, pk, os: fin > 0 ? Math.max(0, (pk - fin) / fin * 100) : NaN, ts, ess: 1 - fin}};
+}
+const gl = p => `P = ${+p.P}, I = ${+p.I}, D = ${+p.D}`;
+function sysTag(p) {
+  const pl = PLANTS[p.sys]; if (!pl) return "";
+  const def = pl.pars.every(([k, v]) => p.pp[k] === v);
+  if (p.sys === "msd" && def) return "";
+  const short = {msd: "MSD", fo: "1st order", so: "2nd order", fopdt: "1st order + delay", integ: "integrator", third: "3rd order"}[p.sys];
+  return ` · ${short}${pl.pars.length ? " (" + pl.pars.map(([k]) => `${psym(k)}=${p.pp[k]}`).join(", ") + ")" : ""}`;
+}
+const simLabel = p => gl(p) + sysTag(p);
+
+/* =====================================================================
+   Closed-loop transfer function and poles (ideal PID), for the theory panel
+   polynomials are arrays of coefficients, highest power first
+   ===================================================================== */
+function plantTF(sys, q) {
+  switch (sys) {
+    case "msd":   return {num: [1], den: [q.M, q.B, q.K], txt: `1 / (${polyStr([q.M, q.B, q.K])})`};
+    case "fo":    return {num: [q.K], den: [q.tau, 1], txt: `${fmtC(q.K)} / (${polyStr([q.tau, 1])})`};
+    case "so":    return {num: [q.K * q.wn * q.wn], den: [1, 2 * q.zeta * q.wn, q.wn * q.wn], txt: `${fmtC(q.K * q.wn * q.wn)} / (${polyStr([1, 2 * q.zeta * q.wn, q.wn * q.wn])})`};
+    case "integ": return {num: [q.K], den: [q.tau, 1, 0], txt: `${fmtC(q.K)} / (${polyStr([q.tau, 1, 0])})`};
+    case "third": return {num: [1], den: [1, 3, 3, 1], txt: "1 / (s+1)³"};
+    default:      return null;           // pure delay: not a rational transfer function
+  }
+}
+const trimP = a => { let i = 0; while (i < a.length - 1 && Math.abs(a[i]) < 1e-12) i++; return a.slice(i); };
+function addP(a, b) { const n = Math.max(a.length, b.length), r = new Array(n).fill(0); a.forEach((v, i) => r[n - a.length + i] += v); b.forEach((v, i) => r[n - b.length + i] += v); return trimP(r); }
+function mulP(a, b) { const r = new Array(a.length + b.length - 1).fill(0); a.forEach((x, i) => b.forEach((y, j) => r[i + j] += x * y)); return trimP(r); }
+const fmtC = v => { const a = Math.abs(v); return a >= 1e4 || (a < 1e-3 && a > 0) ? v.toExponential(2) : String(Number(v.toPrecision(4))); };
+function polyStr(c) {
+  c = trimP(c); const n = c.length - 1, sup = ["", "", "²", "³", "⁴", "⁵"]; let out = "";
+  c.forEach((v, i) => {
+    const pw = n - i; if (Math.abs(v) < 1e-12) return;
+    const sg = v < 0 ? " − " : (out ? " + " : ""), a = Math.abs(v);
+    const coef = pw > 0 && Math.abs(a - 1) < 1e-12 ? "" : fmtC(a);
+    out += (out ? sg : (v < 0 ? "−" : "")) + coef + (pw > 0 ? "s" + sup[pw] : "");
+  });
+  return out || "0";
+}
+function rootsP(c) {                       // Durand-Kerner
+  c = trimP(c); const n = c.length - 1; if (n < 1) return [];
+  const a = c.map(v => v / c[0]);
+  const cm = (x, y) => [x[0] * y[0] - x[1] * y[1], x[0] * y[1] + x[1] * y[0]];
+  const cd = (x, y) => { const d = y[0] * y[0] + y[1] * y[1]; return [(x[0] * y[0] + x[1] * y[1]) / d, (x[1] * y[0] - x[0] * y[1]) / d]; };
+  const R = 1 + Math.max(...a.slice(1).map(Math.abs));
+  let z = Array.from({length: n}, (_, k) => [R * 0.9 * Math.cos(2 * Math.PI * k / n + 0.4), R * 0.9 * Math.sin(2 * Math.PI * k / n + 0.4)]);
+  for (let it = 0; it < 500; it++) {
+    let moved = 0;
+    z = z.map((zi, i) => {
+      let f = [1, 0]; for (let k = 1; k <= n; k++) { f = cm(f, zi); f[0] += a[k]; }
+      let d = [1, 0]; z.forEach((zj, j) => { if (j !== i) d = cm(d, [zi[0] - zj[0], zi[1] - zj[1]]); });
+      const st = cd(f, d); moved = Math.max(moved, Math.hypot(st[0], st[1]));
+      return [zi[0] - st[0], zi[1] - st[1]];
+    });
+    if (moved < 1e-12) break;
+  }
+  const tiny = v => Math.abs(v) < 1e-7 * Math.max(1, R) ? 0 : v;
+  return z.map(r => [tiny(r[0]), tiny(r[1])]).sort((p, q) => q[0] - p[0] || q[1] - p[1]);
+}
+function closedLoop(p) {
+  const G = plantTF(p.sys, p.pp); if (!G) return null;
+  const P = +p.P, I = +p.I, D = +p.D;
+  const cNum = I !== 0 ? trimP([D, P, I]) : trimP([D, P]), cDen = I !== 0 ? [1, 0] : [1];
+  const num = mulP(G.num, cNum), den = addP(mulP(G.den, cDen), num);
+  return {G, cNum, cDen, num, den, poles: rootsP(den), zeros: num.length > 1 ? rootsP(num) : []};
+}
+const cStr = z => Math.abs(z[1]) < 1e-9 ? fmtC(z[0]) : `${fmtC(z[0])} ± ${fmtC(Math.abs(z[1]))}j`;
+function poleList(ps) { const out = []; ps.forEach(z => { if (z[1] >= 0) out.push(cStr(z)); }); return out.join(",  "); }
+function drawPZ(canvas, cl) {
+  const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight; if (!W) return;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  if (!cl) { ctx.fillStyle = "#5d6773"; ctx.font = "12px Segoe UI, Arial"; ctx.fillText("No pole map: a time delay is not a rational transfer function.", 8, H / 2); return; }
+  const pts = cl.poles.concat(cl.zeros);
+  let m = Math.max(1, ...pts.map(z => Math.max(Math.abs(z[0]), Math.abs(z[1])))) * 1.25;
+  const sc = Math.min(W / (2 * m), H / (2 * m)), X = x => W / 2 + x * sc, Y = y => H / 2 - y * sc;
+  ctx.fillStyle = "rgba(19,122,63,.07)"; ctx.fillRect(0, 0, W / 2, H);
+  ctx.fillStyle = "rgba(180,35,24,.06)"; ctx.fillRect(W / 2, 0, W / 2, H);
+  ctx.strokeStyle = "#9aa3ad"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+  ctx.fillStyle = "#5d6773"; ctx.font = "11px Segoe UI, Arial"; ctx.fillText("Re", W - 18, H / 2 - 4); ctx.fillText("Im", W / 2 + 4, 11);
+  const tick = niceTicks(0, m, 3).step; ctx.textAlign = "center";
+  for (let v = tick; v < m; v += tick) { ctx.fillText(fmtTick(-v, tick), X(-v), H / 2 + 12); ctx.fillText(fmtTick(v, tick), X(v), H / 2 + 12); }
+  ctx.lineWidth = 2;
+  cl.zeros.forEach(z => { ctx.strokeStyle = "#0072B2"; ctx.beginPath(); ctx.arc(X(z[0]), Y(z[1]), 5, 0, 2 * Math.PI); ctx.stroke(); });
+  cl.poles.forEach(z => { ctx.strokeStyle = z[0] > 1e-9 ? "#b42318" : "#111"; const x = X(z[0]), y = Y(z[1]); ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y + 5); ctx.moveTo(x + 5, y - 5); ctx.lineTo(x - 5, y + 5); ctx.stroke(); });
+}
+function updateTheory(p) {
+  const el = $("sTheory"); if (!el) return;
+  const cl = p ? closedLoop(p) : null;
+  if (!p) { el.textContent = "—"; drawPZ($("pz"), null); return; }
+  if (!cl) { el.innerHTML = "G(s) contains a time delay e^(−Ls): no rational closed-loop transfer function."; drawPZ($("pz"), null); return; }
+  const C = cl.cDen.length > 1 ? `(${polyStr(cl.cNum)}) / s` : polyStr(cl.cNum);
+  const maxRe = Math.max(...cl.poles.map(z => z[0]));
+  const stab = maxRe < -1e-6 ? `<span class="st">stable</span>` : maxRe > 1e-6 ? `<span class="un">unstable</span>` : `<b>marginally stable</b>`;
+  el.innerHTML = `G(s) = ${cl.G.txt}\nC(s) = ${C}\n<b>Y(s)/R(s) = (${polyStr(cl.num)}) / (${polyStr(cl.den)})</b>\nPoles: ${poleList(cl.poles)}  → ${stab}`;
+  drawPZ($("pz"), cl);
+}
+
+/* =====================================================================
+   Plotting (canvas, no libraries)
+   ===================================================================== */
+function niceTicks(lo, hi, n = 6) {
+  if (!(hi > lo)) { hi = lo + 1; }
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw) || 10 * mag;
+  const out = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9 * step; v += step) out.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+  return {ticks: out, step};
+}
+const fmtTick = (v, step) => { let d = 0; while (d < 6 && Math.abs(Math.round(step * 10 ** d) - step * 10 ** d) > 1e-6 * 10 ** d) d++; return v.toFixed(d); };
+
+/* spec: {title, xl, yl, series:[{x,y,c,label,dash,w}], hl:[{y,c,label}], view} */
+function drawPlot(ctx, W, H, spec, opt = {}) {
+  const fs = opt.scale || 1;
+  const pad = {l: 74 * fs, r: 18 * fs, t: (spec.title ? 34 : 14) * fs, b: 50 * fs};
+  ctx.save(); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const s of spec.series) for (let i = 0; i < s.y.length; i++) { const yv = s.y[i]; if (!isFinite(yv)) continue; x0 = Math.min(x0, s.x[i]); x1 = Math.max(x1, s.x[i]); y0 = Math.min(y0, yv); y1 = Math.max(y1, yv); }
+  for (const h of spec.hl || []) { y0 = Math.min(y0, h.y); y1 = Math.max(y1, h.y); }
+  if (!isFinite(x0)) { x0 = 0; x1 = spec.xmax || 10; y0 = 0; y1 = 1; }
+  if (spec.xmax) x1 = Math.max(x1, spec.xmax);
+  x0 = Math.min(x0, 0);
+  if (spec.ylim) { y0 = Math.max(y0, spec.ylim[0]); y1 = Math.min(y1, spec.ylim[1]); }
+  if (y1 - y0 < 1e-9) { y0 -= 1; y1 += 1; } else { const m = (y1 - y0) * 0.06; y0 -= m; y1 += m; }
+  if (spec.view) ({x0, x1, y0, y1} = spec.view);
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  const X = v => pad.l + (v - x0) / (x1 - x0) * pw, Y = v => pad.t + (1 - (v - y0) / (y1 - y0)) * ph;
+  ctx.font = `${12 * fs}px Segoe UI, Arial, sans-serif`; ctx.fillStyle = "#333"; ctx.strokeStyle = "#e6e9ee"; ctx.lineWidth = 1;
+  const xt = niceTicks(x0, x1, 8), yt = niceTicks(y0, y1, 6);
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const v of xt.ticks) { const px = X(v); ctx.beginPath(); ctx.moveTo(px, pad.t); ctx.lineTo(px, pad.t + ph); ctx.stroke(); ctx.fillText(fmtTick(v, xt.step), px, pad.t + ph + 6 * fs); }
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (const v of yt.ticks) { const py = Y(v); ctx.beginPath(); ctx.moveTo(pad.l, py); ctx.lineTo(pad.l + pw, py); ctx.stroke(); ctx.fillText(fmtTick(v, yt.step), pad.l - 6 * fs, py); }
+  ctx.strokeStyle = "#8a94a1"; ctx.strokeRect(pad.l, pad.t, pw, ph);
+  ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  ctx.font = `${13 * fs}px Segoe UI, Arial, sans-serif`; ctx.fillText(spec.xl, pad.l + pw / 2, H - 6 * fs);
+  ctx.save(); ctx.translate(16 * fs, pad.t + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = "middle"; ctx.fillText(spec.yl, 0, 0); ctx.restore();
+  if (spec.title) { ctx.font = `600 ${14 * fs}px Segoe UI, Arial, sans-serif`; ctx.textBaseline = "top"; ctx.fillText(spec.title, pad.l + pw / 2, 8 * fs); }
+  ctx.save(); ctx.beginPath(); ctx.rect(pad.l, pad.t, pw, ph); ctx.clip();
+  for (const h of spec.hl || []) { ctx.strokeStyle = h.c || "#777"; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2 * fs; ctx.beginPath(); ctx.moveTo(pad.l, Y(h.y)); ctx.lineTo(pad.l + pw, Y(h.y)); ctx.stroke(); }
+  for (const s of spec.series) {
+    ctx.strokeStyle = s.c; ctx.lineWidth = (s.w || 1.8) * fs; ctx.setLineDash(s.dash ? s.dash.map(v => v * fs) : []);
+    ctx.beginPath(); let pen = false;
+    const stride = Math.max(1, Math.floor(s.y.length / (pw * 2)));
+    for (let i = 0; i < s.y.length; i += (s.stairs ? 1 : stride)) {
+      const px = X(s.x[i]), py = Y(Math.max(Math.min(s.y[i], y1 + (y1 - y0) * 10), y0 - (y1 - y0) * 10));
+      if (!isFinite(s.y[i])) { pen = false; continue; }
+      if (!pen) { ctx.moveTo(px, py); pen = true; }
+      else if (s.stairs) { ctx.lineTo(px, Y(s.y[i - 1])); ctx.lineTo(px, py); }
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+  ctx.restore(); ctx.setLineDash([]);
+  const items = spec.series.filter(s => s.label).concat((spec.hl || []).filter(h => h.label).map(h => ({label: h.label, c: h.c, dash: [6, 4]})));
+  if (items.length) {
+    ctx.font = `${12 * fs}px Segoe UI, Arial, sans-serif`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    const lw = Math.max(...items.map(i => ctx.measureText(i.label).width)) + 44 * fs, lh = 18 * fs;
+    const lx = pad.l + pw - lw - 8 * fs, ly = pad.t + 8 * fs;
+    ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.strokeStyle = "#c5ccd6"; ctx.lineWidth = 1;
+    ctx.fillRect(lx, ly, lw, items.length * lh + 8 * fs); ctx.strokeRect(lx, ly, lw, items.length * lh + 8 * fs);
+    items.forEach((it, i) => {
+      const yy = ly + 4 * fs + lh * (i + .5);
+      ctx.strokeStyle = it.c; ctx.lineWidth = 2.2 * fs; ctx.setLineDash(it.dash ? it.dash.map(v => v * fs) : []);
+      ctx.beginPath(); ctx.moveTo(lx + 8 * fs, yy); ctx.lineTo(lx + 32 * fs, yy); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "#111"; ctx.fillText(it.label, lx + 38 * fs, yy);
+    });
+  }
+  ctx.restore();
+  return {X, Y, x0, x1, y0, y1, pad, pw, ph, inv: (px, py) => [x0 + (px - pad.l) / pw * (x1 - x0), y0 + (1 - (py - pad.t) / ph) * (y1 - y0)]};
+}
+
+/* interactive canvas: hover readout, drag-zoom, double-click reset */
+function attachPlot(canvas, readout, getSpec, figKey, meanEl) {
+  const st = {geo: null, drag: null};
+  const render = (rect) => {
+    const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
+    if (!W || !H) return;
+    if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
+    const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const spec = getSpec(true); spec.view = VIEW[figKey()] || null;
+    st.geo = drawPlot(ctx, W, H, spec); st.spec = spec;
+    if (meanEl) {
+      const v = VIEW[figKey()];
+      if (!v) meanEl.textContent = "Zoom in (drag a rectangle) to get the mean of each curve over the visible time window.";
+      else {
+        const parts = [];
+        for (const s of spec.series) {
+          if (!s.label || s.x.length < 3 || s.label.startsWith("Input")) continue;
+          let sum = 0, n = 0; for (let i = 0; i < s.x.length; i++) if (s.x[i] >= v.x0 && s.x[i] <= v.x1 && isFinite(s.y[i])) { sum += +s.y[i]; n++; }
+          if (n) parts.push(`${s.label}: ${(sum / n).toPrecision(5)}`);
+        }
+        meanEl.textContent = `Mean over ${v.x0.toFixed(1)}–${v.x1.toFixed(1)} s   ·   ` + (parts.join("   ·   ") || "no data in window");
+      }
+    }
+    if (rect) { ctx.fillStyle = "rgba(11,92,173,.12)"; ctx.strokeStyle = "#0b5cad"; ctx.fillRect(rect[0], rect[1], rect[2], rect[3]); ctx.strokeRect(rect[0], rect[1], rect[2], rect[3]); }
+    if (st.hover !== undefined && !rect) { const g = st.geo, px = st.hover; if (px >= g.pad.l && px <= g.pad.l + g.pw) { ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(px, g.pad.t); ctx.lineTo(px, g.pad.t + g.ph); ctx.stroke(); ctx.setLineDash([]); } }
+  };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  canvas.addEventListener("mousedown", e => { st.drag = pos(e); });
+  canvas.addEventListener("mousemove", e => {
+    const p = pos(e);
+    if (st.drag) { render([Math.min(st.drag[0], p[0]), Math.min(st.drag[1], p[1]), Math.abs(p[0] - st.drag[0]), Math.abs(p[1] - st.drag[1])]); return; }
+    if (!st.geo) return;
+    st.hover = p[0]; render();
+    const [tx] = st.geo.inv(p[0], p[1]);
+    const parts = [`t = ${tx.toFixed(2)} s`];
+    for (const s of st.spec.series) {
+      if (s.x.length < 3 || !s.label) continue;
+      let i = 0, best = Infinity; const dt = s.x[1] - s.x[0], g = Math.round((tx - s.x[0]) / dt);
+      for (let j = Math.max(0, g - 2); j < Math.min(s.x.length, g + 3); j++) if (Math.abs(s.x[j] - tx) < best) { best = Math.abs(s.x[j] - tx); i = j; }
+      if (best <= dt) parts.push(`${s.label}: ${(+s.y[i]).toPrecision(6)}`);
+    }
+    readout.textContent = parts.join("   ·   ");
+  });
+  canvas.addEventListener("mouseleave", () => { st.hover = undefined; render(); });
+  window.addEventListener("mouseup", e => {
+    if (!st.drag) return; const a = st.drag, b = pos(e); st.drag = null;
+    if (Math.abs(b[0] - a[0]) > 6 && Math.abs(b[1] - a[1]) > 6 && st.geo) {
+      const [xa, ya] = st.geo.inv(Math.min(a[0], b[0]), Math.max(a[1], b[1])), [xb, yb] = st.geo.inv(Math.max(a[0], b[0]), Math.min(a[1], b[1]));
+      VIEW[figKey()] = {x0: xa, x1: xb, y0: ya, y1: yb};
+    }
+    render();
+  });
+  canvas.addEventListener("dblclick", () => { delete VIEW[figKey()]; render(); });
+  new ResizeObserver(() => render()).observe(canvas);
+  return render;
+}
+
+/* figure spec for screen / export / report; live = include the slider preview */
+function figSpec(id, what, live) {
+  const F = FIGS[id], runs = S.figs[id].runs;
+  if (F.sim) {
+    what = what || "y";
+    const all = live && PREVIEW ? runs.concat([PREVIEW]) : runs;
+    const series = [], tmax = Math.max(40, ...all.map(r => r.p.tEnd));
+    if (what === "y") series.push({x: [0, 0, tmax], y: [0, 1, 1], c: "#000", w: 1.4, dash: [7, 4], label: "Input (step)"});
+    const val = r => what === "y" ? r.y : what === "e" ? r.y.map(v => 1 - v) : r.u;
+    runs.forEach((r, i) => series.push({x: r.t, y: val(r), c: COLORS[i % COLORS.length], label: simLabel(r.p) + (r.m && r.unstable && STUDY ? " (unstable)" : "")}));
+    if (live && PREVIEW) series.push({x: PREVIEW.t, y: val(PREVIEW), c: "#222", w: 2, dash: [3, 3], label: "Current sliders (not added)"});
+    const yl = what === "y" ? "Output y(t)" : what === "e" ? "Error e(t) = 1 − y(t)" : "Controller output u(t)";
+    const ylim = what === "u" ? [-50, 50] : [-3, 4];
+    return {title: F.title + (what === "y" ? "" : what === "e" ? " - error" : " - controller output"), xl: "Time (s)", yl, series, xmax: tmax, ylim};
+  }
+  const rig = RIGS[F.rig]; what = what || "err";
+  const series = runs.map((r, i) => ({x: r.t, y: what === "err" ? r.err : what === "pv" ? r.pv : r.out, stairs: what === "out",
+    c: COLORS[i % COLORS.length], label: rigLabel(r)}));
+  const hl = what === "err" ? [{y: 0, c: "#777"}] : what === "pv" ? Array.from(new Set(runs.map(r => r.sp))).map(v => ({y: v, c: "#777", label: `Setpoint ${v}`})) : [];
+  const yl = what === "err" ? `Error (${rig.unit})` : what === "pv" ? `${rig.pvName} (${rig.unit})` : "Fan PWM (0-255)";
+  return {title: F.title + (what === "err" ? "" : what === "pv" ? " - measured output" : " - controller output"), xl: "Time (s)", yl, series, hl,
+          xmax: Math.max(rig.dur, ...runs.map(r => r.n ? r.n * T : 0))};
+}
+function rigLabel(r) {
+  let s = gl(r);
+  if (r.changes && r.changes.length) { const c = r.changes[r.changes.length - 1]; s += ` → tuned to ${gl(c)}`; }
+  return s + (r.source === "emulator" ? " (emulator)" : "") + (r.stopped ? " (stopped)" : "");
+}
+function figCanvas(id, what, W = 1600, H = 900) {
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const sp = figSpec(id, what, false); sp.view = VIEW[id] || null;
+  drawPlot(c.getContext("2d"), W, H, sp, {scale: 1.6}); return c;
+}
+function download(name, data, type) {
+  const a = document.createElement("a"); a.href = typeof data === "string" && type ? URL.createObjectURL(new Blob([data], {type})) : data; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function figCsv(id) {
+  const F = FIGS[id], runs = S.figs[id].runs;
+  if (F.sim) return "run,system,plant_parameters,P,I,D,time_s,input,output,controller_output\n" + runs.map((r, i) => r.t.map((t, k) => [i + 1, r.p.sys, `"${JSON.stringify(r.p.pp).replace(/"/g, "'")}"`, r.p.P, r.p.I, r.p.D, t.toFixed(2), 1, r.y[k].toPrecision(8), r.u[k].toPrecision(6)].join(",")).join("\n")).join("\n");
+  return "run,P,I,D,source,time_s,setpoint,measured,fan_pwm,error\n" + runs.map((r, i) => r.t.map((t, k) => [i + 1, r.P, r.I, r.D, r.source, t.toFixed(2), r.sp, r.pv[k], r.out[k], r.err[k]].join(",")).join("\n")).join("\n");
+}
+async function copyFig(id, what, btn) {
+  try {
+    const blob = await new Promise(res => figCanvas(id, what).toBlob(res, "image/png"));
+    await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+    flash(btn, "Copied ✓");
+  } catch (e) { flash(btn, "Copy not allowed – use Save PNG"); }
+}
+function flash(btn, txt) { const o = btn.textContent; btn.textContent = txt; setTimeout(() => btn.textContent = o, 1600); }
+function figAction(act, id, what, btn, after) {
+  const base = `Lab4_${FIGS[id].short.replace(/[^A-Za-z0-9]+/g, "_")}`;
+  if (act === "png") download(`${base}${what && what !== "err" && what !== "y" ? "_" + what : ""}.png`, figCanvas(id, what).toDataURL("image/png"));
+  else if (act === "copy") copyFig(id, what, btn);
+  else if (act === "csv") { if (S.figs[id].runs.length) download(base + ".csv", figCsv(id), "text/csv"); }
+  else if (act === "zoom") { delete VIEW[id]; after(); }
+  else if (act === "clear") { if (S.figs[id].runs.length && confirm("Remove all runs from this figure?")) { S.figs[id].runs = []; delete VIEW[id]; save(); onDataChanged(); after(); } }
+}
+
+/* =====================================================================
+   Step-by-step list of the lab values of a figure: one button per step,
+   no way to run them all at once; a step is ticked when its run is in the figure
+   ===================================================================== */
+const sameGains = (a, b) => ["P", "I", "D"].every(k => Math.abs(+a[k] - +b[k]) < 1e-9);
+function stepDone(id, g) {
+  return S.figs[id].runs.some(r => r.type === "sim" ? sameGains(r.p, g) && r.p.sys === "msd"
+                                                    : sameGains(r, g) && !r.stopped && !(r.changes && r.changes.length));
+}
+function renderSteps(ol, id, verb, act) {
+  const steps = FIGS[id].lab || [];
+  const next = steps.findIndex(g => !stepDone(id, g));
+  ol.innerHTML = steps.length ? steps.map((g, i) => {
+    const done = stepDone(id, g), cls = done ? "done" : i === next ? "next" : "";
+    return `<li class="${cls}"><span class="n">${done ? "✓" : i + 1}</span><span class="g">${gl(g)}${FIGS[id].rig ? "*" : ""}</span>` +
+           `<button class="b ${i === next ? "p" : ""}" data-step="${i}">${done ? "Again" : verb}</button></li>`;
+  }).join("") : `<li><span></span><span class="hint">No fixed values: choose them with the sliders and press "Add to figure".</span><span></span></li>`;
+  ol.querySelectorAll("[data-step]").forEach(b => b.onclick = () => act(steps[+b.dataset.step]));
+  stepLocks(ol);
+}
+/* a step unlocks only when every earlier step is done; rig steps also need a connected, idle board */
+function stepLocks(ol) {
+  const rig = ol.id !== "sSteps", lis = [...ol.querySelectorAll("li")];
+  let open = true;
+  lis.forEach(li => {
+    const b = li.querySelector("[data-step]"); if (!b) return;
+    b.disabled = !open || (rig && (!LINK.connected || !!LINK.running));
+    b.title = open ? "" : "Complete the previous step first";
+    if (!li.classList.contains("done")) open = false;
+  });
+}
+
+/* =====================================================================
+   Ex.1 tab
+   ===================================================================== */
+let render1, SYS = "msd", PP = {};
+function buildEx1() {
+  $("sGains").innerHTML = gainsHTML("s", GMAX1);
+  wireGains("s", GMAX1, () => schedPreview());
+  setGains("s", GMAX1, {P: 1, I: 0, D: 0});
+  
+  $("sT").oninput = () => schedPreview();
+  $("sShow").onchange = () => { SHOW.ex1 = $("sShow").value; render1(); };
+  setSystem("msd");
+  render1 = attachPlot($("cv1"), $("ro1"), live => figSpec(SEL.ex1, SHOW.ex1, live), () => SEL.ex1, $("ro1m"));
+  $("sRun").onclick = () => addSim(readSim());
+  
+  
+  $("tab-ex1").querySelectorAll("[data-act]").forEach(b => b.onclick = () => figAction(b.dataset.act, SEL.ex1, SHOW.ex1, b, refresh1));
+  refresh1(); schedPreview();
+}
+function setSystem(sys, pp) {
+  SYS = sys; const pl = PLANTS[sys]; PP = {};
+  for (const [k, v] of pl.pars) PP[k] = pp && pp[k] !== undefined ? pp[k] : v;
+  if ($("sSys")) $("sSys").value = sys;
+  $("sDesc").textContent = `Plant G(s): ${pl.name}. Unity feedback, step 0 → 1 at t = 0, fixed step 0.01 s. PID: P + I/s + D·N s/(s + N), N = 100 (Simulink default).`;
+  $("sPars").innerHTML = pl.pars.length ? "<h3>System</h3>" + pl.pars.map(([k, , d]) => `<label class="f">${psym(k)} <span class="hint" style="margin:0 auto 0 6px">${d}</span><input type="number" data-k="${k}" value="${PP[k]}" step="any"></label>`).join("") : "";
+  $("sPars").querySelectorAll("input").forEach(i => i.oninput = () => { PP[i.dataset.k] = +i.value; schedPreview(); });
+  schedPreview();
+}
+function readSim() { return Object.assign({sys: SYS, pp: Object.assign({}, PP), tEnd: Math.min(600, Math.max(1, +$("sT").value || 40))}, readGains("s")); }
+function validSim(p) {
+  const q = p.pp;
+  if (p.sys === "msd" && !(q.M > 0)) return "M must be positive.";
+  if ("tau" in q && !(q.tau > 0)) return "τ must be positive.";
+  if ("wn" in q && !(q.wn > 0)) return "ωn must be positive.";
+  if ("L" in q && !(q.L >= 0 && q.L <= 10)) return "L must be between 0 and 10 s.";
+  return "";
+}
+let prevPend = false;
+function schedPreview() {
+  if (prevPend) return; prevPend = true;
+  requestAnimationFrame(() => {
+    prevPend = false; const p = readSim(), bad = validSim(p);
+    PREVIEW = bad ? null : simRun(p);
+    updateTheory(bad ? null : p);
+    
+    if (render1) render1();
+  });
+}
+function addSim(p, quiet) {
+  const bad = validSim(p); if (bad) { alert(bad); return; }
+  S.figs[SEL.ex1].runs.push(simRun(p)); PREVIEW = null;
+  if (!quiet) { save(); onDataChanged(); refresh1(); }
+}
+function refresh1() {
+  $("sub1").innerHTML = ex1Figs.map(id => `<button data-f="${id}" class="${id === SEL.ex1 ? "on" : ""}">${FIGS[id].short}<span class="n">(${S.figs[id].runs.length})</span></button>`).join("");
+  $("sub1").querySelectorAll("button").forEach(b => b.onclick = () => { SEL.ex1 = b.dataset.f; refresh1(); });
+  
+  $("sStepsH").textContent = `Steps for figure ${FIGS[SEL.ex1].short}`;
+  $("sStepsIntro").textContent = FIGS[SEL.ex1].intro || "";
+  renderSteps($("sSteps"), SEL.ex1, "Simulate", g => {
+    if (!(PP.M === 1 && PP.B === 1 && PP.K === 1) || +$("sT").value !== 40) {
+      if (!confirm("The lab uses M = 1, B = 1, K = 1 and a stop time of 40 s, but other values are set. Simulate anyway?")) return;
+    }
+    setGains("s", GMAX1, g); addSim(readSim());
+  });
+  
+  const runs = S.figs[SEL.ex1].runs;
+  let head = "<tr><th>#</th><th>Gains and system</th>", row = r => "";
+  
+  $("tb1").innerHTML = runs.length ? head + "<th></th></tr>" +
+    runs.map((r, i) => `<tr><td><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span>${i + 1}</td><td>${simLabel(r.p)}</td>${row(r)}<td><button class="x" data-i="${i}" title="Remove">✕</button></td></tr>`).join("")
+    : `<tr><td class="hint">No runs in this figure yet. Set the gains with the sliders and press "Add to figure".</td></tr>`;
+  $("tb1").querySelectorAll(".x").forEach(b => b.onclick = () => { runs.splice(+b.dataset.i, 1); save(); onDataChanged(); refresh1(); });
+  render1();
+}
+
+/* =====================================================================
+   Ex.2 / Ex.3 tabs (rig experiments)
+   ===================================================================== */
+const RT = {};    // per-rig UI handles
+function buildRig(rig) {
+  const R = RIGS[rig], el = $("tab-" + R.tab), isBeam = rig === "beam";
+  el.innerHTML = `
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>${isBeam ? "Ex.2 · Balance beam" : "Ex.3 · Ball in a tube"}</h2>
+        <p class="hint">${isBeam ? "The fan (PWM pin 5) lifts the beam; the pivot potentiometer (A4) gives the beam position in ADC counts (0-1023 for 0-5 V). Error e = setpoint − reading."
+                                  : "The fan (PWM pin 5) lifts the ball; the ultrasonic sensor at the top gives the ball's distance from the top in cm. Error e = distance − setpoint (positive when the ball is too low)."}</p>
+        <h3>${isBeam ? "Step 2 · Find the SETPOINT (level beam)" : "Setpoint"}</h3>
+        <div class="big" id="${rig}Live">—</div>
+        <div class="row"><button class="b" id="${rig}Mon">Start live reading</button>${isBeam ? `<button class="b" id="${rig}Cap" disabled>Use this reading as SETPOINT</button>` : ""}</div>
+        ${isBeam ? `<p class="hint">Hold the beam level (use the level indicator), start the live reading, then press "Use this reading as SETPOINT".</p>` : ""}
+        <label class="f">Setpoint <span><input type="number" id="${rig}SP" step="${isBeam ? 1 : 0.5}"> <span class="u">${R.unit}</span></span></label>
+        <p class="hint">${R.spHint}</p>
+        <h3>${isBeam ? "Step 3 · Run the controller" : "Run the controller"}</h3>
+        ${gainsHTML(rig, R.max)}
+        <label class="f">Run time <span><input type="number" id="${rig}Dur" value="${R.dur}" step="5"> <span class="u">s</span></span></label>
+        <h3>Steps for this figure</h3>
+        <p class="stepintro hint" id="${rig}StepsIntro"></p>
+        <ol class="steplist" id="${rig}Steps"></ol>
+        <p class="hint">* These values may need to be varied slightly for your rig: use the sliders and "Run on the rig" for other values.</p>
+        
+        <div class="row"><button class="b p" id="${rig}Go">Run on the rig</button><button class="b stop" id="${rig}Stop" disabled>STOP</button></div>
+        <div class="phase" id="${rig}Phase">Connect to the Arduino first.</div>
+        <p class="hint">Switch on the 5 V bench supply before running. STOP switches the fan off at any time. The Nano also switches the fan off at the end of every run.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="subtabs" id="${rig}Sub"></div>
+      <div class="row" style="margin-top:0"><span class="hint">Plot:</span>
+        <select id="${rig}Show"><option value="err">Error vs time${LAB ? " (for the report)" : ""}</option><option value="pv">Measured output and setpoint</option><option value="out">Fan PWM (controller output)</option></select></div>
+      <div class="plotwrap"><canvas id="${rig}Cv"></canvas></div>
+      <div class="readout" id="${rig}Ro">Hover over the plot to read values · drag to zoom · double-click to reset zoom</div>
+      <div class="readout mean" id="${rig}Rom"></div>
+      <div class="row">
+        <button class="b" data-act="png">Save PNG</button><button class="b" data-act="copy">Copy image</button>
+        <button class="b" data-act="csv">Save CSV</button><button class="b" data-act="zoom">Reset zoom</button>
+        <button class="b" data-act="clear">Clear figure</button>
+      </div>
+      <table class="runs" id="${rig}Tb"></table>
+      
+    </div>
+  </div>`;
+  const h = RT[rig] = {render: null};
+  $(rig + "SP").value = S.sp[rig];
+  $(rig + "SP").onchange = () => { S.sp[rig] = +$(rig + "SP").value; save(); };
+  wireGains(rig, R.max, () => liveTune(rig));
+  setGains(rig, R.max, FIGS[R.figs[0]].lab[0]);
+  $(rig + "Show").onchange = () => { SHOW[rig] = $(rig + "Show").value; h.render(); };
+  $(rig + "Mon").onclick = () => toggleMonitor(rig);
+  if (isBeam) $(rig + "Cap").onclick = () => { const v = MON.last; if (v == null) return; const r = Math.round(v); $(rig + "SP").value = r; S.sp.beam = r; S.beamSPmeasured = r; save(); onDataChanged(); };
+  $(rig + "Go").onclick = () => rigRun(rig);
+  $(rig + "Stop").onclick = () => rigStop();
+  h.render = attachPlot($(rig + "Cv"), $(rig + "Ro"), () => figSpec(SEL[rig], SHOW[rig]), () => SEL[rig], $(rig + "Rom"));
+  el.querySelectorAll("[data-act]").forEach(b => b.onclick = () => figAction(b.dataset.act, SEL[rig], SHOW[rig], b, () => refreshRig(rig)));
+  refreshRig(rig);
+}
+function rigMetrics(r) {
+  const n = r.err.length, k0 = Math.max(0, n - Math.round(10 / T)), w = r.err.slice(k0);
+  const mean = w.reduce((a, b) => a + b, 0) / (w.length || 1), sd = Math.sqrt(w.reduce((a, b) => a + (b - mean) ** 2, 0) / (w.length || 1));
+  return {mean, sd, iae: r.err.reduce((a, b) => a + Math.abs(b), 0) * T};
+}
+function refreshRig(rig) {
+  const R = RIGS[rig];
+  const sub = $(rig + "Sub");
+  sub.innerHTML = R.figs.map(id => `<button data-f="${id}" class="${id === SEL[rig] ? "on" : ""}">${FIGS[id].short}<span class="n">(${S.figs[id].runs.length})</span></button>`).join("");
+  sub.querySelectorAll("button").forEach(b => b.onclick = () => { SEL[rig] = b.dataset.f; refreshRig(rig); });
+  $(rig + "StepsIntro").textContent = FIGS[SEL[rig]].intro || "";
+  renderSteps($(rig + "Steps"), SEL[rig], "Run on rig", g => { if (LINK.running) return; setGains(rig, R.max, g); rigRun(rig); });
+  const runs = S.figs[SEL[rig]].runs, u = R.unit;
+  let head = `<tr><th>#</th><th>Gains</th><th>Setpoint</th>`, row = r => "";
+  
+  $(rig + "Tb").innerHTML = runs.length ? head + `<th></th></tr>` +
+    runs.map((r, i) => `<tr><td><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span>${i + 1}</td><td>${rigLabel(r).replace(/ \((emulator|stopped)\)/g, "")}${r.source === "emulator" ? '<span class="flag emu">emulator</span>' : ""}${r.stopped ? '<span class="flag no">stopped</span>' : ""}</td><td>${r.sp}</td>${row(r)}<td><button class="x" data-i="${i}" title="Remove">✕</button></td></tr>`).join("")
+    : `<tr><td class="hint">No runs in this figure yet.</td></tr>`;
+  $(rig + "Tb").querySelectorAll(".x").forEach(b => b.onclick = () => { if (LINK.running) return; runs.splice(+b.dataset.i, 1); save(); onDataChanged(); refreshRig(rig); });
+  RT[rig].render();
+  updateButtons();
+}
+
+/* =====================================================================
+   Serial link (Web Serial or emulator) and protocol
+   ===================================================================== */
+const LINK = {tr: null, port: null, connected: false, emu: null, waiters: [], onRow: null, mode: null, lock: Promise.resolve(), running: null, abort: false};
+function logLine(s) { const L = $("log"); L.textContent += s + "\n"; if (L.textContent.length > 60000) L.textContent = L.textContent.slice(-40000); L.scrollTop = L.scrollHeight; }
+function setStatus(t, cls) { $("status").textContent = t; $("status").className = "status " + (cls || ""); }
+function onLine(l) {
+  if (l.startsWith("T:")) {
+    const o = {}; for (const kv of l.split(",")) { const [k, v] = kv.split(":"); o[k] = +v; }
+    if (LINK.onRow) LINK.onRow(o);
+    return;
+  }
+  if (!l.startsWith("PV:") && !l.startsWith("__")) logLine("< " + l);
+  for (const w of LINK.waiters) if (w.pred(l)) { LINK.waiters.splice(LINK.waiters.indexOf(w), 1); clearTimeout(w.to); w.res(l); return; }
+}
+function waitFor(pred, ms) {
+  const w = {pred};
+  const p = new Promise((res, rej) => {
+    w.res = res;
+    if (ms > 0) w.to = setTimeout(() => { const i = LINK.waiters.indexOf(w); if (i >= 0) LINK.waiters.splice(i, 1); rej(new Error("no reply from the board")); }, ms);
+    LINK.waiters.push(w);
+  });
+  p.cancel = () => { clearTimeout(w.to); const i = LINK.waiters.indexOf(w); if (i >= 0) LINK.waiters.splice(i, 1); };
+  return p;
+}
+async function send(c) { if (!LINK.tr) throw new Error("not connected"); if (!c.startsWith("PV?")) logLine("> " + c); await LINK.tr.write(c + "\n"); }
+async function cmd(c, ms = 3000) { const p = waitFor(l => l === "OK" || l.startsWith("ERR"), ms); await send(c); const r = await p; if (r !== "OK") throw new Error(`${c} → ${r}`); }
+async function query(c, prefix, ms = 2000) { const p = waitFor(l => l.startsWith(prefix), ms); await send(c); return (await p).slice(prefix.length); }
+function exclusive(fn) { const run = LINK.lock.then(fn, fn); LINK.lock = run.catch(() => {}); return run; }
+async function setMode(rig) { if (LINK.mode !== rig) { await cmd("MODE:" + rig.toUpperCase()); LINK.mode = rig; } }
+
+async function connectSerial() {
+  if (!("serial" in navigator)) { setStatus("This browser cannot open serial ports: use Chrome or Edge", "bad"); return; }
+  let port;
+  try { port = await navigator.serial.requestPort(); } catch (e) { return; }   // user closed the chooser
+  try {
+    await port.open({baudRate: 115200});
+  } catch (e) { setStatus("Port busy or unavailable: close other programs using it (Arduino IDE, MATLAB, serial monitors)", "bad"); return; }
+  LINK.port = port;
+  const dec = new TextDecoderStream(); port.readable.pipeTo(dec.writable).catch(() => {});
+  const reader = dec.readable.getReader();
+  const enc = new TextEncoderStream(); enc.readable.pipeTo(port.writable).catch(() => {});
+  const writer = enc.writable.getWriter();
+  LINK.tr = {write: s => writer.write(s), close: async () => { try { await reader.cancel(); } catch (e) {} try { await writer.close(); } catch (e) {} try { await port.close(); } catch (e) {} }};
+  (async () => {
+    let buf = "";
+    while (true) {
+      let r; try { r = await reader.read(); } catch (e) { break; }
+      if (r.done) break; buf += r.value; let i;
+      while ((i = buf.indexOf("\n")) >= 0) { const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (l) onLine(l); }
+    }
+    if (LINK.port === port) linkLost();
+  })();
+  await handshake(false);
+}
+async function handshake(emu) {
+  LINK.isEmu = emu; LINK.mode = null;
+  setStatus("Waiting for the board (it restarts when the port opens)…", "warn");
+  try { await waitFor(l => l === "READY", 8000); } catch (e) { logLine("(no READY seen – sending START anyway)"); }
+  try {
+    await cmd("START");
+    let id = "";
+    try { id = await query("ID?", "ID:", 1500); } catch (e) { id = ""; }
+    $("fwinfo").textContent = id ? `Firmware: ${id}${emu ? " (emulated)" : ""}` : "Firmware did not answer ID?: it may not be the Lab 4 firmware. Ask a demonstrator.";
+    LINK.connected = true;
+    setStatus(emu ? `Emulator connected (${LINK.emu.speed}×)` : "Arduino connected", emu ? "warn" : "good");
+  } catch (e) {
+    setStatus("No answer from the board. Check the COM port and that the Lab 4 firmware is installed.", "bad");
+    await disconnect();
+  }
+  updateButtons();
+}
+function linkLost() { stopMonitor(); LINK.connected = false; LINK.tr = null; LINK.port = null; LINK.mode = null; if (LINK.running) LINK.running.lost = true; onLine("__LOST__"); setStatus("Disconnected", "bad"); updateButtons(); }
+async function disconnect() {
+  stopMonitor();
+  const tr = LINK.tr; LINK.port = null;
+  if (tr) { try { await Promise.race([tr.write("STOP\n"), new Promise(r => setTimeout(r, 300))]); } catch (e) {} await tr.close(); }
+  LINK.tr = null; LINK.emu = null; LINK.connected = false; LINK.mode = null;
+  if (LINK.running) { LINK.running.lost = true; onLine("__LOST__"); }
+  setStatus("Not connected"); updateButtons();
+}
+function updateButtons() {
+  const c = LINK.connected, busy = !!LINK.running;
+  $("btnConnect").disabled = c; $("btnDisconnect").disabled = !c;
+  if ($("btnEmu")) $("btnEmu").disabled = c;
+  for (const rig in RIGS) {
+    if (!$(rig + "Go")) continue;
+    $(rig + "Go").disabled = !c || busy; $(rig + "Stop").disabled = !busy; $(rig + "Mon").disabled = !c || busy;
+    if ($(rig + "Cap")) $(rig + "Cap").disabled = !(MON.rig === rig && MON.last != null);
+    $(rig + "Mon").textContent = MON.rig === rig ? "Stop live reading" : "Start live reading";
+    const tuneLive = busy && LINK.running.rig === rig && $(rig + "LiveTune") && $(rig + "LiveTune").checked;
+    for (const g of ["P", "I", "D"]) { $(rig + g).disabled = busy && !tuneLive; $(rig + g + "R").disabled = busy && !tuneLive; }
+    stepLocks($(rig + "Steps"));
+    if (!busy) $(rig + "Phase").textContent = c ? "Ready." : "Connect to the Arduino first.";
+  }
+}
+
+/* ---- live sensor reading (setpoint calibration, sensor check) ---- */
+const MON = {rig: null, timer: null, last: null};
+function toggleMonitor(rig) { if (MON.rig === rig) stopMonitor(); else startMonitor(rig); }
+function startMonitor(rig) {
+  stopMonitor(); MON.rig = rig; MON.last = null; updateButtons();
+  const tick = () => exclusive(async () => {
+    if (MON.rig !== rig || !LINK.connected) return;
+    await setMode(rig);
+    const v = +(await query("PV?", "PV:", 1500));
+    MON.last = v; $(rig + "Live").textContent = `${v.toFixed(rig === "beam" ? 0 : 1)} ${RIGS[rig].unit}`; updateButtons();
+  }).catch(e => { $(rig + "Live").textContent = "no reading"; }).finally(() => { if (MON.rig === rig) MON.timer = setTimeout(tick, 250); });
+  tick();
+}
+function stopMonitor() { if (MON.timer) clearTimeout(MON.timer); const r = MON.rig; MON.rig = null; MON.timer = null; if (r) updateButtons(); }
+
+/* ---- gains changed while a run is in progress (study edition option) ---- */
+const TUNE = {timer: null};
+function liveTune(rig) {
+  const run = LINK.running;
+  if (!run || run.rig !== rig || !$(rig + "LiveTune") || !$(rig + "LiveTune").checked) return;
+  clearTimeout(TUNE.timer);
+  TUNE.timer = setTimeout(async () => {
+    const g = readGains(rig);
+    try { await cmd(`KP:${g.P},KI:${g.I},KD:${g.D}`); (run.changes = run.changes || []).push(Object.assign({t: run.t.length ? run.t[run.t.length - 1] : 0}, g)); }
+    catch (e) { $(rig + "Phase").textContent = "Could not change the gains: " + e.message; }
+  }, 150);
+}
+
+/* ---- one closed-loop run on the rig ---- */
+async function rigRun(rig) {
+  if (!LINK.connected || LINK.running) return;
+  const R = RIGS[rig], figId = SEL[rig];
+  const {P, I, D} = readGains(rig), sp = +$(rig + "SP").value;
+  const dur = Math.min(600, Math.max(5, +$(rig + "Dur").value)), n = Math.round(dur / T);
+  if (![P, I, D, sp].every(isFinite)) { $(rig + "Phase").textContent = "Check the gains and the setpoint."; return; }
+  if (rig === "beam" && (sp < 300 || sp > 700) && !confirm(`Setpoint ${sp} is outside the usual range (400-600). Run anyway?`)) return;
+  stopMonitor();
+  const run = {type: "rig", rig, P, I, D, sp, n, source: LINK.isEmu ? "emulator" : "rig", date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
+  LINK.running = run; LINK.abort = false; updateButtons();
+  S.figs[figId].runs.push(run); delete VIEW[figId]; refreshRig(rig);
+  let pend = false;
+  const onRow = o => {
+    run.t.push(o.T); run.pv.push(o.PV); run.out.push(o.OUT); run.err.push(o.ERR);
+    $(rig + "Phase").textContent = `Running · ${o.T.toFixed(1)} / ${dur} s · ${R.unit === "cm" ? "distance" : "reading"} ${o.PV.toFixed(1)} ${R.unit} · fan ${Math.round(o.OUT)}`;
+    $(rig + "Live").textContent = `${o.PV.toFixed(rig === "beam" ? 0 : 1)} ${R.unit}`;
+    if (!pend) { pend = true; requestAnimationFrame(() => { pend = false; RT[rig].render(); }); }
+  };
+  try {
+    await exclusive(async () => {
+      // registered first, so that STOP pressed at any moment ends the run
+      const done = waitFor(l => l === "DONE" || l === "__STOP__" || l === "__LOST__", 0);
+      try {
+        $(rig + "Phase").textContent = "Sending settings to the Nano…";
+        for (const c of ["STOP", null, "SP:" + sp, "LIM:0,255", "AW:" + (S.aw ? 1 : 0), `KP:${P},KI:${I},KD:${D}`]) {
+          if (LINK.abort) throw new Error("stopped");
+          if (c) await cmd(c); else await setMode(rig);
+        }
+        if (LINK.abort) throw new Error("stopped");
+        LINK.onRow = onRow;                            // rows after RUN belong to this run
+        await cmd("RUN:" + n);
+        if (LINK.abort) await send("STOP");          // STOP pressed while RUN was in flight
+        const end = await done;
+        if (end !== "DONE") run.stopped = true;
+      } finally { done.cancel(); }
+    });
+    $(rig + "Phase").textContent = run.stopped ? "Stopped. The fan is off." : "Finished. The fan is off.";
+  } catch (e) {
+    run.stopped = true; $(rig + "Phase").textContent = (e.message === "stopped" ? "Stopped." : "Error: " + e.message);
+  } finally {
+    LINK.onRow = null; LINK.running = null; clearTimeout(TUNE.timer);
+    const msg = $(rig + "Phase").textContent;
+    if (!run.t.length) S.figs[figId].runs.splice(S.figs[figId].runs.indexOf(run), 1);
+    save(); refreshRig(rig); onDataChanged();
+    $(rig + "Phase").textContent = msg;
+  }
+}
+async function rigStop() {
+  LINK.abort = true;
+  try { if (LINK.tr) await send("STOP"); } catch (e) {}
+  onLine("__STOP__");
+}
+
+
+
+
+/* =====================================================================
+   Report (lab edition only)
+   ===================================================================== */
+const REPORT = [
+  {h: "Pre-lab: theory (M = B = K = 1)", parts: [
+    {h: "Closed loop with P-only control", qs: [
+      ["p1", "Derive the closed-loop transfer function Y(s)/R(s) of the mass-spring-damper with a P-only controller (unity feedback)."],
+      ["p2", "Use the final value theorem to find the steady-state output for a unit step as a function of P. Evaluate it for P = 1, 2, 5, 100 and 500."],
+      ["p3", "Find the closed-loop natural frequency ωn and damping ratio ζ as functions of P. What do they predict about the oscillation and the overshoot as P increases?"]]},
+    {h: "Closed loop with PI and PID control", qs: [
+      ["p4", "Derive the closed-loop characteristic polynomial with a PI controller and show, with the final value theorem, that the steady-state output is 1 for any stabilising P and I."],
+      ["p5", "For P = 2 and D = 0, use the Routh criterion to find the range of I for which the closed loop is stable."],
+      ["p6", "With an ideal PID controller, how does D enter the characteristic polynomial? What effect do you expect on damping and on the steady-state value?"]]}]},
+  {h: "Ex.1: PID control of the mass-spring-damper (bicycle) system", parts: [
+    {h: "The effect of proportional action (P)", fig: "f1a", n: 3, qs: [
+      ["q1", "Comment on the effect of the proportional controller on the mass-spring-damper system in terms of both its dynamics and the steady-state output (recall that the desired output is 1)."],
+      ["q2", "Can you achieve the desired final value by increasing P? Give the exact steady-state values you found for P = 100 and P = 500 (Figure 1(b))."],
+      ["q3", "What happens as P increases?"]]},
+    {h: "Large proportional gain (P = 100 and 500)", fig: "f1b", n: 2, qs: []},
+    {h: "The effect of integral action (I)", fig: "f1c", n: 3, qs: [
+      ["q4", "What impact does the inclusion of I have on the final (steady-state) output?"],
+      ["q5", "How does increasing I affect the response of the system?"]]},
+    {h: "The effect of derivative action (D)", fig: "f1d", n: 3, qs: [
+      ["q6", "What impact does the inclusion of D have on the final response?"]]},
+    {h: "Controller output with derivative action", fig: "f1d", what: "u", n: 3, qs: [
+      ["q6b", "Look at the controller output u(t) for figure 1(d). What happens to u just after t = 0 when D > 0, and why? Why would this be a problem for the fan of the rigs, whose drive is limited to 0–255?"]]},
+    {h: "Stability limit", fig: "f1e", n: 3, qs: [
+      ["q6c", "Which run of figure 1(e) is marginally stable, and how do the response and the pole map show it? Compare with your Routh result from the pre-lab (question p5)."]]},
+    {h: "PID design", fig: "f1f", n: 1, qs: [
+      ["q6d", "Give your final P, I and D. Read from the plot (hover and zoom) the overshoot, the 2 % settling time and the final value, and show that the specification (overshoot < 10 %, settling time < 5 s, zero steady-state error) is met. Explain how you chose the gains, using the pole map."]]}]},
+  {h: "Ex.2: Controlling a practical system: the balance beam", parts: [
+    {h: "Setpoint", qs: [["q7", "What setpoint (SETPOINT) value did you obtain for your level beam?"]]},
+    {h: "P only", fig: "f2a", n: 2, qs: [["q8", "Comment on the effect of changing P on the error signal (i.e. on achieving the desired output)."]]},
+    {h: "P only: why the error remains", fig: "f2a", what: "out", n: 2, qs: [
+      ["q8b", "For each P-only run, zoom into the last 20 s and note the mean error ē (error view) and the mean fan drive ū (fan PWM view). Compute P·ē and compare it with ū. Use this to explain why increasing P reduces, but cannot remove, the steady-state error on this rig."]]},
+    {h: "P and I", fig: "f2b", n: 2, qs: [["q9", "Comment on the effect of including I in the control system."]]}]},
+  {h: "Ex.3: Controlling a practical system: the ball in a tube", parts: [
+    {h: "P and PI control", fig: "f3", n: 3, qs: [
+      ["q10", "Comment on the effect of including I in the control system."],
+      ["q11", "Comment on the differences between the last two sets of results, i.e. when P is varied while I is kept constant."]]}]},
+];
+const repWhat = (id, w) => w || (FIGS[id].sim ? "y" : "err");
+function figStatus(id, n) {
+  const runs = S.figs[id].runs, emu = runs.some(r => r.source === "emulator");
+  const what = FIGS[id].sim ? `${runs.length} output${runs.length === 1 ? "" : "s"} + input` : `${runs.length} error graph${runs.length === 1 ? "" : "s"}`;
+  return `<span class="flag ${runs.length >= n ? "ok" : "no"}">${what} (${n} expected)</span>${emu ? '<span class="flag emu">contains emulator data</span>' : ""}`;
+}
+function buildReport() {
+  if (S.beamSPmeasured != null && !S.report.answers.q7) S.report.answers.q7 = String(S.beamSPmeasured);
+  $("rNames").value = S.report.names || ""; $("rDate").value = S.report.date || new Date().toISOString().slice(0, 10);
+  $("rBody").innerHTML = REPORT.map(sec => `<div class="card"><h2>${sec.h}</h2>` + sec.parts.map(p => `
+    <h3>${p.h}${p.fig ? " " + figStatus(p.fig, p.n) : ""}</h3>
+    ${p.fig ? (S.figs[p.fig].runs.length ? `<img class="figthumb" data-fig="${p.fig}" data-what="${p.what || ""}" alt="${FIGS[p.fig].title}">` : `<p class="hint">No runs yet in figure ${FIGS[p.fig].short}.</p>`) : ""}
+    ${p.qs.map(([id, q]) => `<div class="q"><p>${q}</p><textarea data-q="${id}">${esc(S.report.answers[id] || "")}</textarea></div>`).join("")}`).join("") + `</div>`).join("");
+  $("rBody").querySelectorAll("img[data-fig]").forEach(img => img.src = figCanvas(img.dataset.fig, repWhat(img.dataset.fig, img.dataset.what), 1400, 760).toDataURL("image/png"));
+  $("rBody").querySelectorAll("textarea").forEach(t => t.oninput = () => { S.report.answers[t.dataset.q] = t.value; save(); });
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
+function printReport() {
+  const a = S.report.answers;
+  let h = `<h1>EE104 Lab 4: Investigating PID Control · Report</h1><p><b>Names:</b> ${esc(S.report.names || "")}<br><b>Date:</b> ${esc(S.report.date || "")}</p>`;
+  for (const sec of REPORT) {
+    h += `<h2>${sec.h}</h2>`;
+    for (const p of sec.parts) {
+      h += `<h3>${p.h}</h3>`;
+      if (p.fig) {
+        const runs = S.figs[p.fig].runs;
+        h += runs.length ? `<div class="fig"><img src="${figCanvas(p.fig, repWhat(p.fig, p.what), 1600, 860).toDataURL("image/png")}"></div>` : `<p><i>Plot not attached.</i></p>`;
+        if (runs.some(r => r.source === "emulator")) h += `<p><i>Note: this figure contains emulator runs.</i></p>`;
+      }
+      for (const [id, q] of p.qs) h += `<p>${q}</p><div class="ans">${esc(a[id] || "")}</div>`;
+    }
+  }
+  $("print").innerHTML = h;
+  setTimeout(() => window.print(), 100);
+}
+function allCsv() {
+  let out = "figure,run,P,I,D,source,time_s,setpoint_or_input,measured_or_output,fan_pwm_or_u,error\n";
+  for (const id in FIGS) S.figs[id].runs.forEach((r, i) => {
+    if (r.type === "sim") r.t.forEach((t, k) => { if (k % 10 === 0) out += [id, i + 1, r.p.P, r.p.I, r.p.D, "simulation", t.toFixed(2), 1, r.y[k].toPrecision(8), r.u[k].toPrecision(6), (1 - r.y[k]).toPrecision(8)].join(",") + "\n"; });
+    else r.t.forEach((t, k) => out += [id, i + 1, r.P, r.I, r.D, r.source, t.toFixed(2), r.sp, r.pv[k], r.out[k], r.err[k]].join(",") + "\n");
+  });
+  download("Lab4_all_data.csv", out, "text/csv");
+}
+$("rNames").oninput = () => { S.report.names = $("rNames").value; save(); };
+$("rDate").oninput = () => { S.report.date = $("rDate").value; save(); };
+$("rPrint").onclick = printReport;
+$("rCsv").onclick = allCsv;
+$("rReset").onclick = () => { if (confirm("Delete all runs and answers stored in this browser?")) { try { localStorage.removeItem(STORE); } catch (e) {} location.reload(); } };
+onDataChanged = () => { if ($("tab-report").classList.contains("on")) buildReport(); };
+
+
+/* =====================================================================
+   Wiring
+   ===================================================================== */
+function showTab(t) {
+  document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("on", s.id === "tab-" + t));
+  if (t === "report" && typeof buildReport === "function") buildReport();
+  if (t === "ex1") render1(); for (const rig in RT) if (RIGS[rig].tab === t) RT[rig].render();
+  if (MON.rig && RIGS[MON.rig].tab !== t) stopMonitor();
+}
+document.querySelectorAll("#nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+$("btnConnect").onclick = connectSerial;
+$("btnDisconnect").onclick = disconnect;
+if ("serial" in navigator) navigator.serial.addEventListener("disconnect", e => { if (e.target === LINK.port) linkLost(); });
+window.addEventListener("beforeunload", () => { if (LINK.tr) try { LINK.tr.write("STOP\n"); } catch (e) {} });
+
+load();
+buildEx1(); buildRig("beam"); buildRig("ball"); updateButtons();
+if (typeof buildSelfTest === "function") buildSelfTest();
+if (location.hash.startsWith("#tab=")) showTab(location.hash.slice(5));
+document.body.dataset.ready = "1";
+</script>
+</body>
+</html>
