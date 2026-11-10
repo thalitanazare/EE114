@@ -265,7 +265,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 16:57";
+const BUILD = "2026-11-10 17:05";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -908,7 +908,10 @@ function animLoop(ts) {
       else if (A.playing) { A.t += dt * A.speed; if (A.t >= A.tEnd(r)) { A.t = A.tEnd(r); A.playing = false; A.plot(); } }
     }
     const f = r ? A.frame(r, A.t) : null;
-    if (f) A.phase += dt * (f.fan || 0) / 255 * 40;
+    if (f) {                                   // the fan only turns while the run (or its replay) is going on
+      f.active = A.playing || !!live; f.ended = !live && r && A.t >= A.tEnd(r) - 1e-9;
+      if (f.active) A.phase += dt * (f.fan || 0) / 255 * 40;
+    }
     drawScene(A, f);
     A.ui();
     if ((A.playing || live) && ts - A.lastPlot > 50) { A.lastPlot = ts; if (!live) A.plot(); }
@@ -991,6 +994,7 @@ function drawMSD(ctx, W, H, f, A) {
   ctx.fillStyle = "#5d6773"; ctx.textAlign = "right"; ctx.font = "11px Segoe UI, Arial"; ctx.fillText("schematic: force u(t) from the controller, displacement y(t)", W - 10, 16);
 }
 
+const fanText = f => f.active ? `fan ${Math.round(f.fan)}/255` : f.ended ? "fan off (run finished)" : `fan ${Math.round(f.fan)}/255 (paused)`;
 /* ---- balance beam; frame = {pv, fan, sp} ---- */
 function drawBeam(ctx, W, H, f) {
   // fan fixed to the base under the free end of the beam, blowing upwards onto a plastic plate (cover) on the beam
@@ -1014,7 +1018,7 @@ function drawBeam(ctx, W, H, f) {
   ctx.beginPath(); ctx.moveTo(px - 0.2 * L, py); ctx.lineTo(px + L + 20, py); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = "#137a3f"; ctx.textAlign = "right"; ctx.font = "12px Segoe UI, Arial"; ctx.fillText(`level = setpoint ${Math.round(sp)}`, px - 0.2 * L - 6, py + 4);
   // air from the fan up to the plate
-  const k = f ? f.fan / 255 : 0, plateY = py - (fx - px) * Math.tan(th) + 9;
+  const k = f && f.active ? f.fan / 255 : 0, plateY = py - (fx - px) * Math.tan(th) + 9;
   if (k > 0.02) for (let i = -1; i <= 1; i++) {
     const x = fx + i * fw / 3.2, y0 = fyTop - 3, y1 = y0 - (y0 - plateY - 3) * (0.3 + 0.7 * k);
     arrow(ctx, x, y0, x, y1, `rgba(0,114,178,${0.3 + 0.6 * k})`, 1.8);
@@ -1035,14 +1039,14 @@ function drawBeam(ctx, W, H, f) {
   ctx.restore();
   ctx.fillStyle = "#fff"; ctx.strokeStyle = "#1d232b"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 6, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#1d232b"; ctx.textAlign = "left"; ctx.font = "13px Consolas, monospace";
-  if (f) { ctx.fillText(`reading ${pv.toFixed(0)} counts`, 12, 18); ctx.fillText(`fan ${Math.round(f.fan)}/255`, 12, 36); }
+  if (f) { ctx.fillText(`reading ${pv.toFixed(0)} counts`, 12, 18); ctx.fillText(fanText(f), 12, 36); }
   ctx.fillStyle = "#5d6773"; ctx.textAlign = "right"; ctx.font = "11px Segoe UI, Arial"; ctx.fillText("schematic: beam angle exaggerated", W - 10, 16);
 }
 
 /* ---- ball in a tube; frame = {pv (cm from the top), fan, sp} ---- */
 function drawBall(ctx, W, H, f) {
   const tx = Math.max(70, W * 0.18), tw = 34, top = 26, bot = H - 40, sc = (bot - top) / 32;
-  const sp = f ? f.sp : S.sp.ball, d = f ? Math.max(1, Math.min(31, f.pv)) : 31, k = f ? f.fan / 255 : 0;
+  const sp = f ? f.sp : S.sp.ball, d = f ? Math.max(1, Math.min(31, f.pv)) : 31, k = f && f.active ? f.fan / 255 : 0;
   ctx.fillStyle = "rgba(200,220,240,.25)"; ctx.fillRect(tx - tw / 2, top, tw, bot - top);
   ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tx - tw / 2, top); ctx.lineTo(tx - tw / 2, bot); ctx.moveTo(tx + tw / 2, top); ctx.lineTo(tx + tw / 2, bot); ctx.stroke();
   ctx.fillStyle = "#cfd4db"; ctx.fillRect(tx - tw / 2 - 6, top - 14, tw + 12, 14); ctx.strokeRect(tx - tw / 2 - 6, top - 14, tw + 12, 14);
@@ -1058,7 +1062,7 @@ function drawBall(ctx, W, H, f) {
   ctx.fillStyle = "#6a3d9a"; ctx.textAlign = "right"; ctx.fillText(`${d.toFixed(1)} cm`, tx - tw / 2 - 26, (top + yb) / 2 + 4);
   ctx.fillStyle = "#5d6773"; ctx.textAlign = "left"; ctx.fillText("ultrasonic sensor", tx + tw / 2 + 10, top - 4); ctx.fillText("fan", tx + tw / 2 + 10, bot + 12);
   ctx.fillStyle = "#1d232b"; ctx.font = "13px Consolas, monospace";
-  if (f) { const x = tx + tw / 2 + 200; ctx.fillText(`distance ${d.toFixed(1)} cm from the top`, Math.min(x, W - 270), 44); ctx.fillText(`error ${(d - sp).toFixed(1)} cm`, Math.min(x, W - 270), 62); ctx.fillText(`fan ${Math.round(f.fan)}/255`, Math.min(x, W - 270), 80); }
+  if (f) { const x = tx + tw / 2 + 200; ctx.fillText(`distance ${d.toFixed(1)} cm from the top`, Math.min(x, W - 270), 44); ctx.fillText(`error ${(d - sp).toFixed(1)} cm`, Math.min(x, W - 270), 62); ctx.fillText(fanText(f), Math.min(x, W - 270), 80); }
 }
 
 function setupAnimations() {
