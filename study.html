@@ -910,7 +910,8 @@ async function handshake(emu) {
     try { id = await query("ID?", "ID:", 1500); } catch (e) { id = ""; }
     $("fwinfo").textContent = id ? `Firmware: ${id}${emu ? " (emulated)" : ""}` : "Firmware did not answer ID?: it may not be the Lab 4 firmware. Ask a demonstrator.";
     LINK.connected = true;
-    setStatus(emu ? `Emulator connected (${LINK.emu.speed}×)` : "Arduino connected", emu ? "warn" : "good");
+    LINK.lab4fw = !!id;
+    setStatus(emu ? `Emulator connected (${LINK.emu.speed}×)` : id ? "Arduino connected" : "Connected · not the Lab 4 firmware (ask a demonstrator)", emu || !id ? "warn" : "good");
   } catch (e) {
     setStatus("No answer from the board. Check the COM port and that the Lab 4 firmware is installed.", "bad");
     await disconnect();
@@ -997,7 +998,12 @@ async function rigRun(rig) {
         $(rig + "Phase").textContent = "Sending settings to the Nano…";
         for (const c of ["STOP", null, "SP:" + sp, "LIM:0,255", "AW:" + (S.aw ? 1 : 0), `KP:${P},KI:${I},KD:${D}`]) {
           if (LINK.abort) throw new Error("stopped");
-          if (c) await cmd(c); else await setMode(rig);
+          if (!c) { await setMode(rig); continue; }
+          try { await cmd(c); }
+          catch (e) {            // older firmware without anti-windup control: carry on without it
+            if (!c.startsWith("AW:")) throw e;
+            logLine("(the board does not support AW: running with its built-in anti-windup setting)");
+          }
         }
         if (LINK.abort) throw new Error("stopped");
         LINK.onRow = onRow;                            // rows after RUN belong to this run
