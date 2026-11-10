@@ -180,6 +180,11 @@ canvas.anim.tall { height: 240px; }
         <h3>Controller</h3>
         <div id="sGains"></div>
         <label class="f">Stop time <span><input type="number" id="sT" value="40" step="1"> <span class="u">s</span></span></label>
+        <label class="f">Controller <select id="sTs" title="Continuous PID (as the Simulink PID block) or a digital PID updated every T seconds (as on the Arduino)">
+          <option value="0" selected>continuous (step 0.01 s, standard)</option>
+          <option value="0.01">digital, T = 0.01 s</option><option value="0.05">digital, T = 0.05 s</option>
+          <option value="0.1">digital, T = 0.1 s</option><option value="0.2">digital, T = 0.2 s</option><option value="0.5">digital, T = 0.5 s</option>
+        </select></label>
         <div class="metrics" id="sMetrics"></div>
         <h3>Closed loop for the current sliders</h3>
         <div class="theory" id="sTheory"></div>
@@ -249,7 +254,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 16:46";
+const BUILD = "2026-11-10 16:57";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -303,9 +308,9 @@ Object.assign(FIGS, {
 const ex1Figs = Object.keys(FIGS).filter(k => FIGS[k].sim);
 const RIGS = {
   beam: {name: "Balance beam", tab: "ex2", figs: ["f2a", "f2b"], unit: "ADC counts", pvName: "Beam position", dur: 100,
-         sp: 512, spHint: "The level-beam reading (SETPOINT) should be between 400 and 600.", max: [20, 2, 5]},
+         sp: 512, spHint: "The level-beam reading (SETPOINT) should be between 400 and 600.", max: [20, 2, 5], ts: [0.02, 0.05, 0.1, 0.2, 0.5]},
   ball: {name: "Ball in a tube", tab: "ex3", figs: ["f3"], unit: "cm", pvName: "Ball distance from the top", dur: 30,
-         sp: 10, spHint: "Setpoint 10 cm, i.e. about 10 cm below the top of the tube.", max: [20, 5, 5]},
+         sp: 10, spHint: "Setpoint 10 cm, i.e. about 10 cm below the top of the tube.", max: [20, 5, 5], ts: [0.05, 0.1, 0.2, 0.5]},
 };
 const GMAX1 = [1000, 20, 10];       // Ex.1 slider ranges for P, I, D
 
@@ -359,7 +364,28 @@ const readGains = pre => ({P: +$(pre + "P").value || 0, I: +$(pre + "I").value |
 /* =====================================================================
    Ex.1 simulation: PID (filtered derivative, N = 100) + plant, RK4, h = 0.01 s
    ===================================================================== */
+function simulateDigital(p) {
+  const pl = PLANTS[p.sys], q = p.pp, {P, I, D} = p, Ts = p.Ts, h = 0.005, per = Math.round(Ts / h), rec = 2, m = pl.n;
+  const nf = Math.round(p.tEnd / h), nd = pl.delay ? Math.round(q.L / h) : 0, ubuf = [];
+  const n = nf / rec, t = new Float64Array(n + 1), y = new Float64Array(n + 1), u = new Float64Array(n + 1);
+  let x = new Array(m).fill(0), sum = 0, eprev = null, uk = 0;
+  for (let j = 0; j <= nf; j++) {
+    if (j % per === 0) {                                   // controller update every Ts (as on the Arduino)
+      const e = 1 - pl.y(x); if (eprev === null) eprev = e; sum += e;
+      uk = P * e + I * Ts * sum + D * (e - eprev) / Ts; eprev = e;
+    }
+    if (j % rec === 0) { const k = j / rec; t[k] = k * 0.01; y[k] = pl.y(x); u[k] = uk; }
+    if (j === nf) break;
+    ubuf.push(uk); const ud = pl.delay ? (j >= nd ? ubuf[j - nd] : 0) : uk;
+    const f = z => pl.d(z, ud, q);
+    const k1 = f(x), k2 = f(x.map((v, i) => v + h / 2 * k1[i])), k3 = f(x.map((v, i) => v + h / 2 * k2[i])), k4 = f(x.map((v, i) => v + h * k3[i]));
+    x = x.map((v, i) => v + h / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
+    if (!isFinite(x[0]) || Math.abs(pl.y(x)) > 1e6) { const k = Math.floor(j / rec); return {t: t.slice(0, k + 1), y: y.slice(0, k + 1), u: u.slice(0, k + 1), unstable: true}; }
+  }
+  return {t, y, u, unstable: false};
+}
 function simulate(p) {
+  if (p.Ts > 0) return simulateDigital(p);
   const pl = PLANTS[p.sys], q = p.pp, {P, I, D} = p, N = 100, h = 0.01, n = Math.round(p.tEnd / h), m = pl.n;
   const nd = pl.delay ? Math.round(q.L / h) : 0, ubuf = [];
   const ctl = s => { const e = 1 - pl.y(s); return P * e + I * s[m] + D * N * (e - s[m + 1]); };
@@ -400,7 +426,7 @@ function sysTag(p) {
   const short = {msd: "MSD", fo: "1st order", so: "2nd order", fopdt: "1st order + delay", integ: "integrator", third: "3rd order"}[p.sys];
   return ` · ${short}${pl.pars.length ? " (" + pl.pars.map(([k]) => `${psym(k)}=${p.pp[k]}`).join(", ") + ")" : ""}`;
 }
-const simLabel = p => gl(p) + sysTag(p);
+const simLabel = p => gl(p) + sysTag(p) + (p.Ts > 0 ? ` · digital T = ${p.Ts} s` : "");
 
 /* =====================================================================
    Closed-loop transfer function and poles (ideal PID), for the theory panel
@@ -485,7 +511,8 @@ function updateTheory(p) {
   const C = cl.cDen.length > 1 ? `(${polyStr(cl.cNum)}) / s` : polyStr(cl.cNum);
   const maxRe = Math.max(...cl.poles.map(z => z[0]));
   const stab = maxRe < -1e-6 ? `<span class="st">stable</span>` : maxRe > 1e-6 ? `<span class="un">unstable</span>` : `<b>marginally stable</b>`;
-  el.innerHTML = `G(s) = ${cl.G.txt}\nC(s) = ${C}\n<b>Y(s)/R(s) = (${polyStr(cl.num)}) / (${polyStr(cl.den)})</b>\nPoles: ${poleList(cl.poles)}  → ${stab}`;
+  el.innerHTML = `G(s) = ${cl.G.txt}\nC(s) = ${C}\n<b>Y(s)/R(s) = (${polyStr(cl.num)}) / (${polyStr(cl.den)})</b>\nPoles: ${poleList(cl.poles)}  → ${stab}` +
+    (p.Ts > 0 ? `\n<i>Digital PID, T = ${p.Ts} s: these are the poles of the continuous loop. Sampling adds a delay of about T/2, which reduces damping and can destabilise the loop.</i>` : "");
   drawPZ($("pz"), cl);
 }
 
@@ -733,7 +760,7 @@ function figSpec(id, what, live) {
   const yl = what === "err" ? `Error (${rig.unit})` : what === "pv" ? `${rig.pvName} (${rig.unit})` : "Fan PWM (0-255)";
   const fmt = what === "err" ? v => `e = ${(+v).toFixed(2)} ${rig.unit === "cm" ? "cm" : "counts"}` : what === "pv" ? v => `${rig.unit === "cm" ? "distance" : "reading"} = ${(+v).toFixed(rig.unit === "cm" ? 2 : 1)}` : v => `fan = ${Math.round(+v)}`;
   return {title: F.title + (what === "err" ? "" : what === "pv" ? " - measured output" : " - controller output"), xl: "Time (s)", yl, series, hl,
-          xmax: Math.max(rig.dur, ...runs.map(r => r.n ? r.n * T : 0)), what, tips: tipsFor(id, what, series, fmt)};
+          xmax: Math.max(rig.dur, ...runs.map(r => r.n ? r.n * (r.Ts || T) : 0)), what, tips: tipsFor(id, what, series, fmt)};
 }
 /* data tips of a figure for one plot view: [{x, y, c, lines, ref}] */
 function tipsFor(id, what, series, fmt) {
@@ -746,7 +773,7 @@ function tipsFor(id, what, series, fmt) {
   return out;
 }
 function rigLabel(r) {
-  let s = gl(r);
+  let s = gl(r) + (r.Ts && Math.abs(r.Ts - T) > 1e-9 ? ` · T = ${r.Ts} s` : "");
   if (r.changes && r.changes.length) { const c = r.changes[r.changes.length - 1]; s += ` → tuned to ${gl(c)}`; }
   return s + (r.source === "emulator" ? " (emulator)" : "") + (r.stopped ? " (stopped)" : "");
 }
@@ -788,8 +815,8 @@ function figAction(act, id, what, btn, after) {
    ===================================================================== */
 const sameGains = (a, b) => ["P", "I", "D"].every(k => Math.abs(+a[k] - +b[k]) < 1e-9);
 function stepDone(id, g) {
-  return S.figs[id].runs.some(r => r.type === "sim" ? sameGains(r.p, g) && r.p.sys === "msd"
-                                                    : sameGains(r, g) && !r.stopped && !(r.changes && r.changes.length));
+  return S.figs[id].runs.some(r => r.type === "sim" ? sameGains(r.p, g) && r.p.sys === "msd" && !(r.p.Ts > 0)
+                                                    : sameGains(r, g) && !r.stopped && !(r.changes && r.changes.length) && Math.abs((r.Ts || T) - T) < 1e-9);
 }
 function renderSteps(ol, id, verb, act) {
   const steps = FIGS[id].lab || [];
@@ -951,23 +978,45 @@ function drawMSD(ctx, W, H, f, A) {
 
 /* ---- balance beam; frame = {pv, fan, sp} ---- */
 function drawBeam(ctx, W, H, f) {
-  const px = W * 0.3, py = H * 0.48, L = Math.min(W * 0.62, 520), gy = H - 18;
-  const sp = f ? f.sp : S.sp.beam, pv = f ? f.pv : sp - 60;
-  const th = Math.max(-22, Math.min(22, (pv - sp) * 0.18)) * Math.PI / 180;   // exaggerated angle
+  // fan fixed to the base under the free end of the beam, blowing upwards onto a plastic plate (cover) on the beam
+  const px = W * 0.3, py = H * 0.36, L = Math.min(W * 0.62, 520), gy = H - 16;
+  const xe = 0.9 * L, plw = 0.16 * L, fw = 0.13 * L, fh = 14, fyTop = gy - 22 - fh;          // plate centre; fan housing
+  const sp = f ? f.sp : S.sp.beam, pv = f ? f.pv : sp - 40;
+  const dMax = Math.asin(Math.min(0.99, (fyTop - 12 - py) / xe)) * 180 / Math.PI;               // plate rests just above the fan
+  const th = Math.max(-dMax, Math.min(18, (pv - sp) * 0.18)) * Math.PI / 180;                   // exaggerated angle
   ground(ctx, 10, W - 10, gy);
   ctx.fillStyle = "#e1e5ea"; ctx.strokeStyle = "#555"; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(px - 18, gy); ctx.lineTo(px, py + 4); ctx.lineTo(px + 18, gy); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // fan on its stand (fixed to the base)
+  const fx = px + xe;
+  ctx.fillStyle = "#9aa3ad"; ctx.fillRect(fx - fw / 2 + 4, fyTop + fh, 5, gy - fyTop - fh); ctx.fillRect(fx + fw / 2 - 9, fyTop + fh, 5, gy - fyTop - fh);
+  ctx.fillStyle = "#cfd4db"; ctx.fillRect(fx - fw / 2, fyTop, fw, fh); ctx.strokeStyle = "#555"; ctx.lineWidth = 1.2; ctx.strokeRect(fx - fw / 2, fyTop, fw, fh);
+  if (f) fanBlades(ctx, fx, fyTop + fh / 2, fw / 2 - 4, ANIM.beam ? ANIM.beam.phase : 0, true);
+  ctx.fillStyle = "#5d6773"; ctx.textAlign = "right"; ctx.font = "11px Segoe UI, Arial";
+  ctx.fillText("fan (fixed to the base)", fx - fw / 2 - 6, fyTop + fh - 2);
+  // level line
   ctx.setLineDash([6, 4]); ctx.strokeStyle = "#137a3f"; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(px - 0.2 * L, py); ctx.lineTo(px + L + 20, py); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = "#137a3f"; ctx.textAlign = "right"; ctx.fillText(`level = setpoint ${Math.round(sp)}`, px - 0.2 * L - 6, py + 4);
+  ctx.fillStyle = "#137a3f"; ctx.textAlign = "right"; ctx.font = "12px Segoe UI, Arial"; ctx.fillText(`level = setpoint ${Math.round(sp)}`, px - 0.2 * L - 6, py + 4);
+  // air from the fan up to the plate
+  const k = f ? f.fan / 255 : 0, plateY = py - (fx - px) * Math.tan(th) + 9;
+  if (k > 0.02) for (let i = -1; i <= 1; i++) {
+    const x = fx + i * fw / 3.2, y0 = fyTop - 3, y1 = y0 - (y0 - plateY - 3) * (0.3 + 0.7 * k);
+    arrow(ctx, x, y0, x, y1, `rgba(0,114,178,${0.3 + 0.6 * k})`, 1.8);
+  }
+  // beam, level indicator and plastic plate (rotate with the beam)
   ctx.save(); ctx.translate(px, py); ctx.rotate(-th);
   ctx.strokeStyle = "#1d232b"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-0.15 * L, 0); ctx.lineTo(L, 0); ctx.stroke();
-  ctx.fillStyle = "#b9e3c6"; ctx.fillRect(0.38 * L, -9, 0.1 * L, 6); ctx.strokeStyle = "#555"; ctx.lineWidth = 1; ctx.strokeRect(0.38 * L, -9, 0.1 * L, 6);
-  const fx = L - 0.1 * L, fw = 0.12 * L;
-  ctx.fillStyle = "#cfd4db"; ctx.fillRect(fx - fw / 2, 3, fw, 12); ctx.strokeStyle = "#555"; ctx.strokeRect(fx - fw / 2, 3, fw, 12);
-  if (f) fanBlades(ctx, fx, 18, fw / 2 - 3, ANIM.beam ? ANIM.beam.phase : 0, true);
-  const k = f ? f.fan / 255 : 0;
-  if (k > 0.02) for (let i = -1; i <= 1; i++) arrow(ctx, fx + i * fw / 3, 24, fx + i * fw / 3, 24 + 10 + 45 * k, `rgba(0,114,178,${0.35 + 0.6 * k})`, 1.8);
+  // spirit level: the bubble moves towards the higher end and is centred when the beam is level
+  const vx = 0.36 * L, vw = 0.14 * L, vh = 11, vy = -4 - vh, br = 4.2, cx = vx + vw / 2;
+  ctx.fillStyle = "#c9ecd2"; ctx.strokeStyle = "#4a6b52"; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(vx, vy, vw, vh, vh / 2) : ctx.rect(vx, vy, vw, vh); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = "#4a6b52"; ctx.lineWidth = 1;
+  for (const m of [-1, 1]) { ctx.beginPath(); ctx.moveTo(cx + m * (br + 2), vy + 1.5); ctx.lineTo(cx + m * (br + 2), vy + vh - 1.5); ctx.stroke(); }
+  const off = Math.max(-1, Math.min(1, (pv - sp) / 25)) * (vw / 2 - br - 2);
+  ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.strokeStyle = "#6b8f74"; ctx.beginPath(); ctx.ellipse(cx + off, vy + vh / 2, br + 1.5, br - 0.5, 0, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#f2e3b3"; ctx.fillRect(xe - plw / 2, 3, plw, 6); ctx.strokeStyle = "#8a7a4a"; ctx.lineWidth = 1.2; ctx.strokeRect(xe - plw / 2, 3, plw, 6);
+  ctx.fillStyle = "#8a7a4a"; ctx.font = "11px Segoe UI, Arial"; ctx.textAlign = "center"; ctx.fillText("plastic plate", xe, -8);
   ctx.restore();
   ctx.fillStyle = "#fff"; ctx.strokeStyle = "#1d232b"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 6, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#1d232b"; ctx.textAlign = "left"; ctx.font = "13px Consolas, monospace";
@@ -978,7 +1027,7 @@ function drawBeam(ctx, W, H, f) {
 /* ---- ball in a tube; frame = {pv (cm from the top), fan, sp} ---- */
 function drawBall(ctx, W, H, f) {
   const tx = Math.max(70, W * 0.18), tw = 34, top = 26, bot = H - 40, sc = (bot - top) / 32;
-  const sp = f ? f.sp : S.sp.ball, d = f ? Math.max(1, Math.min(31.5, f.pv)) : 30.5, k = f ? f.fan / 255 : 0;
+  const sp = f ? f.sp : S.sp.ball, d = f ? Math.max(1, Math.min(31, f.pv)) : 31, k = f ? f.fan / 255 : 0;
   ctx.fillStyle = "rgba(200,220,240,.25)"; ctx.fillRect(tx - tw / 2, top, tw, bot - top);
   ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tx - tw / 2, top); ctx.lineTo(tx - tw / 2, bot); ctx.moveTo(tx + tw / 2, top); ctx.lineTo(tx + tw / 2, bot); ctx.stroke();
   ctx.fillStyle = "#cfd4db"; ctx.fillRect(tx - tw / 2 - 6, top - 14, tw + 12, 14); ctx.strokeRect(tx - tw / 2 - 6, top - 14, tw + 12, 14);
@@ -1009,7 +1058,7 @@ function setupAnimations() {
     sources: () => S.figs[SEL[rig]].runs.map((r, i) => ({id: i, label: `#${i + 1}: ${gl(r)}`, run: r})),
     live: () => LINK.running && LINK.running.rig === rig && S.figs[SEL[rig]].runs.includes(LINK.running) ? LINK.running : null,
     tEnd: r => r.t.length ? r.t[r.t.length - 1] : 0,
-    frame: (r, t) => { if (!r.t.length) return null; const i = Math.max(0, Math.min(r.t.length - 1, Math.floor(t / T + 1e-6))); return {pv: r.pv[i], fan: r.out[i], sp: r.sp}; },
+    frame: (r, t) => { if (!r.t.length) return null; const i = Math.max(0, Math.min(r.t.length - 1, Math.floor(t / (r.Ts || T) + 1e-6))); return {pv: r.pv[i], fan: r.out[i], sp: r.sp}; },
     draw: rig === "beam" ? drawBeam : drawBall, plotRender: () => RT[rig].render()});
   requestAnimationFrame(animLoop);
 }
@@ -1027,6 +1076,7 @@ function buildEx1() {
   $("sSys").onchange = () => setSystem($("sSys").value);
   
   $("sT").oninput = () => schedPreview();
+  $("sTs").onchange = () => schedPreview();
   $("sShow").onchange = () => { SHOW.ex1 = $("sShow").value; render1(); };
   setSystem("msd");
   render1 = attachPlot($("cv1"), $("ro1"), live => figSpec(SEL.ex1, SHOW.ex1, live), () => SEL.ex1, $("ro1m"), () => ANIM.ex1 ? ANIM.ex1.head() : null);
@@ -1044,7 +1094,7 @@ function setSystem(sys, pp) {
   $("sPars").querySelectorAll("input").forEach(i => i.oninput = () => { PP[i.dataset.k] = +i.value; schedPreview(); });
   schedPreview();
 }
-function readSim() { return Object.assign({sys: SYS, pp: Object.assign({}, PP), tEnd: Math.min(600, Math.max(1, +$("sT").value || 40))}, readGains("s")); }
+function readSim() { return Object.assign({sys: SYS, pp: Object.assign({}, PP), tEnd: Math.min(600, Math.max(1, +$("sT").value || 40)), Ts: +$("sTs").value || 0}, readGains("s")); }
 function validSim(p) {
   const q = p.pp;
   if (p.sys === "msd" && !(q.M > 0)) return "M must be positive.";
@@ -1115,6 +1165,7 @@ function buildRig(rig) {
         <h3>${isBeam ? "Step 3 · Run the controller" : "Run the controller"}</h3>
         ${gainsHTML(rig, R.max)}
         <label class="f">Run time <span><input type="number" id="${rig}Dur" value="${R.dur}" step="5"> <span class="u">s</span></span></label>
+        <label class="f">Sample time T <select id="${rig}Ts" title="How often the Nano measures and updates the PID">${R.ts.map(v => `<option value="${v}"${v === 0.1 ? " selected" : ""}>${v} s${v === 0.1 ? " (standard)" : ""}</option>`).join("")}</select></label>
         <h3>Steps for this figure</h3>
         <p class="stepintro hint" id="${rig}StepsIntro"></p>
         <ol class="steplist" id="${rig}Steps"></ol>
@@ -1158,9 +1209,9 @@ function buildRig(rig) {
   refreshRig(rig);
 }
 function rigMetrics(r) {
-  const n = r.err.length, k0 = Math.max(0, n - Math.round(10 / T)), w = r.err.slice(k0);
+  const Tr = r.Ts || T, n = r.err.length, k0 = Math.max(0, n - Math.round(10 / Tr)), w = r.err.slice(k0);
   const mean = w.reduce((a, b) => a + b, 0) / (w.length || 1), sd = Math.sqrt(w.reduce((a, b) => a + (b - mean) ** 2, 0) / (w.length || 1));
-  return {mean, sd, iae: r.err.reduce((a, b) => a + Math.abs(b), 0) * T};
+  return {mean, sd, iae: r.err.reduce((a, b) => a + Math.abs(b), 0) * Tr};
 }
 function refreshRig(rig) {
   const R = RIGS[rig];
@@ -1301,11 +1352,11 @@ async function rigRun(rig) {
   if (!LINK.connected || LINK.running) return;
   const R = RIGS[rig], figId = SEL[rig];
   const {P, I, D} = readGains(rig), sp = +$(rig + "SP").value;
-  const dur = Math.min(600, Math.max(5, +$(rig + "Dur").value)), n = Math.round(dur / T);
+  const Ts = +$(rig + "Ts").value || T, dur = Math.min(600, Math.max(5, +$(rig + "Dur").value)), n = Math.min(6000, Math.round(dur / Ts));
   if (![P, I, D, sp].every(isFinite)) { $(rig + "Phase").textContent = "Check the gains and the setpoint."; return; }
   if (rig === "beam" && (sp < 300 || sp > 700) && !confirm(`Setpoint ${sp} is outside the usual range (400-600). Run anyway?`)) return;
   stopMonitor();
-  const run = {type: "rig", uid: newUid(), rig, P, I, D, sp, n, source: LINK.isEmu ? "emulator" : "rig", date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
+  const run = {type: "rig", uid: newUid(), rig, P, I, D, sp, n, Ts, source: LINK.isEmu ? "emulator" : "rig", date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
   LINK.running = run; LINK.abort = false; updateButtons();
   S.figs[figId].runs.push(run); delete VIEW[figId]; refreshRig(rig);
   let pend = false;
@@ -1321,11 +1372,15 @@ async function rigRun(rig) {
       const done = waitFor(l => l === "DONE" || l === "__STOP__" || l === "__LOST__", 0);
       try {
         $(rig + "Phase").textContent = "Sending settings to the Nano…";
-        for (const c of ["STOP", null, "SP:" + sp, "LIM:0,255", "AW:" + (S.aw ? 1 : 0), `KP:${P},KI:${I},KD:${D}`]) {
+        for (const c of ["STOP", null, "SP:" + sp, "LIM:0,255", "AW:" + (S.aw ? 1 : 0), "TS:" + Math.round(Ts * 1000), `KP:${P},KI:${I},KD:${D}`]) {
           if (LINK.abort) throw new Error("stopped");
           if (!c) { await setMode(rig); continue; }
           try { await cmd(c); }
           catch (e) {            // older firmware without anti-windup control: carry on without it
+            if (c.startsWith("TS:")) {            // firmware before 1.2 has a fixed 0.1 s sample time
+              if (Math.abs(Ts - 0.1) > 1e-9) throw new Error("this firmware has a fixed sample time of 0.1 s: install the Lab 4 firmware 1.2 to change it");
+              continue;
+            }
             if (!c.startsWith("AW:")) throw e;
             logLine("(the board does not support AW: running with its built-in anti-windup setting)");
           }
@@ -1369,21 +1424,23 @@ class Emulator {
     this.beam = {x: 0, buf: new Array(34).fill(0)};            // y = 418 + x (counts)
     this.ball = {h: 31, v: 0, buf: new Array(4).fill(0), hist: [31, 31, 31]};  // h: distance from top (cm)
     this.ready = setInterval(() => { if (!this.started) this.emit("READY"); }, 500);
-    this.plant = setInterval(() => this.tick(), 100 / speed);
+    this.dt = 0.1; this.loop = () => { this.tick(); this.plant = setTimeout(this.loop, this.dt * 1000 / this.speed); };
+    this.plant = setTimeout(this.loop, this.dt * 1000 / speed);
     setTimeout(() => this.emit("READY"), 200);
   }
-  close() { clearInterval(this.ready); clearInterval(this.plant); }
+  close() { clearInterval(this.ready); clearTimeout(this.plant); this.loop = () => {}; }
   emit(l) { setTimeout(() => this.out(l), 0); }
   rnd() { this.seed = (this.seed * 1103515245 + 12345) & 0x7fffffff; return this.seed / 0x7fffffff; }
   gauss() { const a = Math.max(1e-9, this.rnd()), b = this.rnd(); return Math.sqrt(-2 * Math.log(a)) * Math.cos(2 * Math.PI * b); }
   write(s) { for (const l of s.split("\n")) if (l.trim()) this.cmd(l.trim()); return Promise.resolve(); }
-  measure() {
-    if (this.rig === "beam") return 418 + this.beam.x + 1.2 * this.gauss();
-    const b = this.ball, d = b.h + 0.6 * this.gauss(); b.hist = [b.hist[1], b.hist[2], d];
+  measure() {                         // at rest on a stop with the fan off, the reading is steady
+    const off = !(this.uLast > 0);
+    if (this.rig === "beam") return 418 + this.beam.x + (off && this.beam.x < 0.5 ? 0.05 : 1.2) * this.gauss();
+    const b = this.ball, d = Math.min(31, b.h + (off && b.h > 30.9 ? 0.02 : 0.6) * this.gauss()); b.hist = [b.hist[1], b.hist[2], d];
     return [...b.hist].sort((p, q) => p - q)[1];
   }
-  advance(u) {      // 0.1 s of plant time, 10 sub-steps of 0.01 s
-    for (let j = 0; j < 10; j++) {
+  advance(u) {      // one sample time of plant time, in sub-steps of 0.01 s
+    for (let j = 0, nsub = Math.max(1, Math.round(this.dt / 0.01)); j < nsub; j++) {
       const B = this.beam; B.buf.push(u); const ub = B.buf.shift();
       B.x += 0.01 / 0.776 * (-B.x + 2.2226 * Math.max(0, ub - 73.09)); B.x = Math.min(218, Math.max(0, B.x));
       const L = this.ball; L.buf.push(u); const ul = L.buf.shift();
@@ -1392,19 +1449,19 @@ class Emulator {
     }
   }
   tick() {
-    if (this.state === "idle") { this.advance(0); return; }
+    if (this.state === "idle") { this.uLast = 0; this.advance(0); return; }
     const y = this.measure(), e = this.rig === "ball" ? y - this.sp : this.sp - y;
     let u;
     if (this.state === "run") {
       if (this.first) { this.ep = e; this.first = false; }
-      const d = this.k[2] * (e - this.ep) / T, In = this.I + e;
-      u = this.k[0] * e + this.k[1] * T * In + d;
+      const d = this.k[2] * (e - this.ep) / this.dt, In = this.I + e;
+      u = this.k[0] * e + this.k[1] * this.dt * In + d;
       const wind = (u > this.lim[1] && e > 0) || (u < this.lim[0] && e < 0);
-      if (this.aw && wind) u = this.k[0] * e + this.k[1] * T * this.I + d; else this.I = In;
+      if (this.aw && wind) u = this.k[0] * e + this.k[1] * this.dt * this.I + d; else this.I = In;
       u = Math.min(this.lim[1], Math.max(this.lim[0], u)); this.ep = e;
     } else u = Math.min(this.lim[1], Math.max(this.lim[0], this.uOpen));
-    this.emit(`T:${(this.kk * T).toFixed(2)},SP:${this.sp.toFixed(4)},PV:${y.toFixed(4)},OUT:${u.toFixed(4)},ERR:${e.toFixed(4)}`);
-    this.advance(u); this.kk++;
+    this.emit(`T:${(this.kk * this.dt).toFixed(2)},SP:${this.sp.toFixed(4)},PV:${y.toFixed(4)},OUT:${u.toFixed(4)},ERR:${e.toFixed(4)}`);
+    this.uLast = u; this.advance(u); this.kk++;
     if (--this.left <= 0) { this.state = "idle"; this.emit("DONE"); }
   }
   cmd(c) {
@@ -1412,7 +1469,7 @@ class Emulator {
     if (c === "START") { this.started = true; clearInterval(this.ready); return ok(); }
     if (!this.started) return;
     if (c === "STOP") { this.state = "idle"; return ok(); }
-    if (c === "ID?") return this.emit("ID:EE114-LAB4,1.1");
+    if (c === "ID?") return this.emit("ID:EE114-LAB4,1.2");
     if (c === "PV?") {   // beam: assumes the student holds the beam level for the SETPOINT reading
       const v = this.rig === "beam" ? (this.state === "idle" ? 459 + 1.2 * this.gauss() : 418 + this.beam.x) : this.measure();
       return this.emit("PV:" + v.toFixed(2));
@@ -1422,6 +1479,7 @@ class Emulator {
     if (k === "KP") { const m = c.match(/^KP:([^,]+),KI:([^,]+),KD:(.+)$/); if (!m) return err("bad gains"); this.k = m.slice(1).map(Number); return ok(); }
     if (k === "SP") { this.sp = v[0]; return ok(); }
     if (k === "AW") { this.aw = a !== "0"; return ok(); }
+    if (k === "TS") { if (this.state !== "idle") return err("busy"); const ms = v[0]; if (!(ms >= (this.rig === "ball" ? 50 : 20) && ms <= 1000)) return err("TS out of range"); this.dt = ms / 1000; return ok(); }
     if (k === "LIM") { this.lim = v; return ok(); }
     if (k === "RUN" || k === "STEP") {
       const n = k === "RUN" ? v[0] : v[1]; if (!(n > 0)) return err("n out of range");
