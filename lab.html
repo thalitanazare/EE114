@@ -200,11 +200,11 @@ canvas.anim.tall { height: 240px; }
       <div class="row" style="margin-top:0"><span class="hint">Plot:</span>
         <select id="sShow"><option value="y">Output y(t) and input</option><option value="e">Error e(t)</option><option value="u">Controller output u(t)</option></select></div>
       <div class="plotwrap"><canvas id="cv1"></canvas></div>
-      <div class="readout" id="ro1">Hover over the plot to read values · drag to zoom · double-click to reset zoom</div>
+      <div class="readout" id="ro1">Hover to read values · click a curve to mark its value · drag a rectangle to open a zoom box (drag the box to move it, its corner to resize, × to close)</div>
       <div class="readout mean" id="ro1m"></div>
       <div class="row">
         <button class="b" data-act="png">Save PNG</button><button class="b" data-act="copy">Copy image</button>
-        <button class="b" data-act="csv">Save CSV</button><button class="b" data-act="zoom">Reset zoom</button>
+        <button class="b" data-act="csv">Save CSV</button><button class="b" data-act="zoom">Close zoom</button><button class="b" data-act="marks">Clear marks</button>
         <button class="b" data-act="clear">Clear figure</button>
       </div>
       <table class="runs" id="tb1"></table>
@@ -260,7 +260,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 16:30";
+const BUILD = "2026-11-10 16:35";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -346,6 +346,7 @@ function load() {
     for (const id in st.figs || {}) if (!FIGS[id]) delete st.figs[id];
     S = Object.assign(S, st);
     for (const id in FIGS) if (!S.figs[id]) S.figs[id] = {runs: []};
+    for (const id in FIGS) for (const r of S.figs[id].runs) { if (r.type === "sim") r.p.uid = r.p.uid || newUid(); else r.uid = r.uid || newUid(); }
   } catch (e) { }
 }
 
@@ -405,6 +406,8 @@ function simRun(p) {
           m: {fin, pk, os: fin > 0 ? Math.max(0, (pk - fin) / fin * 100) : NaN, ts, ess: 1 - fin}};
 }
 const gl = p => `P = ${+p.P}, I = ${+p.I}, D = ${+p.D}`;
+const newUid = () => Math.random().toString(36).slice(2, 10);
+const runUid = r => r.type === "sim" ? r.p.uid : r.uid;
 function sysTag(p) {
   const pl = PLANTS[p.sys]; if (!pl) return "";
   const def = pl.pars.every(([k, v]) => p.pp[k] === v);
@@ -513,10 +516,11 @@ function niceTicks(lo, hi, n = 6) {
 }
 const fmtTick = (v, step) => { let d = 0; while (d < 6 && Math.abs(Math.round(step * 10 ** d) - step * 10 ** d) > 1e-6 * 10 ** d) d++; return v.toFixed(d); };
 
-/* spec: {title, xl, yl, series:[{x,y,c,label,dash,w}], hl:[{y,c,label}], view} */
-function drawPlot(ctx, W, H, spec, opt = {}) {
-  const fs = opt.scale || 1;
-  const pad = {l: 74 * fs, r: 18 * fs, t: (spec.title ? 34 : 14) * fs, b: 50 * fs};
+/* core plot: axes, curves, playhead, legend, data tips.
+   spec: {title, xl, yl, series:[{x,y,c,label,dash,w,uid}], hl:[{y,c,label}], view, tips:[{x,y,c,lines}], noLegend} */
+function drawCore(ctx, W, H, spec, opt = {}) {
+  const fs = opt.scale || 1, cp = !!opt.compact;
+  const pad = cp ? {l: 44 * fs, r: 8 * fs, t: 8 * fs, b: 20 * fs} : {l: 74 * fs, r: 18 * fs, t: (spec.title ? 34 : 14) * fs, b: 50 * fs};
   ctx.save(); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (const s of spec.series) for (let i = 0; i < s.y.length; i++) { const yv = s.y[i]; if (!isFinite(yv)) continue; x0 = Math.min(x0, s.x[i]); x1 = Math.max(x1, s.x[i]); y0 = Math.min(y0, yv); y1 = Math.max(y1, yv); }
@@ -529,23 +533,25 @@ function drawPlot(ctx, W, H, spec, opt = {}) {
   if (spec.view) ({x0, x1, y0, y1} = spec.view);
   const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
   const X = v => pad.l + (v - x0) / (x1 - x0) * pw, Y = v => pad.t + (1 - (v - y0) / (y1 - y0)) * ph;
-  ctx.font = `${12 * fs}px Segoe UI, Arial, sans-serif`; ctx.fillStyle = "#333"; ctx.strokeStyle = "#e6e9ee"; ctx.lineWidth = 1;
-  const xt = niceTicks(x0, x1, 8), yt = niceTicks(y0, y1, 6);
+  ctx.font = `${(cp ? 10 : 12) * fs}px Segoe UI, Arial, sans-serif`; ctx.fillStyle = "#333"; ctx.strokeStyle = "#e6e9ee"; ctx.lineWidth = 1;
+  const xt = niceTicks(x0, x1, cp ? 4 : 8), yt = niceTicks(y0, y1, cp ? 4 : 6);
   ctx.textAlign = "center"; ctx.textBaseline = "top";
-  for (const v of xt.ticks) { const px = X(v); ctx.beginPath(); ctx.moveTo(px, pad.t); ctx.lineTo(px, pad.t + ph); ctx.stroke(); ctx.fillText(fmtTick(v, xt.step), px, pad.t + ph + 6 * fs); }
+  for (const v of xt.ticks) { const px = X(v); ctx.beginPath(); ctx.moveTo(px, pad.t); ctx.lineTo(px, pad.t + ph); ctx.stroke(); ctx.fillText(fmtTick(v, xt.step), px, pad.t + ph + (cp ? 4 : 6) * fs); }
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (const v of yt.ticks) { const py = Y(v); ctx.beginPath(); ctx.moveTo(pad.l, py); ctx.lineTo(pad.l + pw, py); ctx.stroke(); ctx.fillText(fmtTick(v, yt.step), pad.l - 6 * fs, py); }
+  for (const v of yt.ticks) { const py = Y(v); ctx.beginPath(); ctx.moveTo(pad.l, py); ctx.lineTo(pad.l + pw, py); ctx.stroke(); ctx.fillText(fmtTick(v, yt.step), pad.l - (cp ? 4 : 6) * fs, py); }
   ctx.strokeStyle = "#8a94a1"; ctx.strokeRect(pad.l, pad.t, pw, ph);
   ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-  ctx.font = `${13 * fs}px Segoe UI, Arial, sans-serif`; ctx.fillText(spec.xl, pad.l + pw / 2, H - 6 * fs);
-  ctx.save(); ctx.translate(16 * fs, pad.t + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = "middle"; ctx.fillText(spec.yl, 0, 0); ctx.restore();
-  if (spec.title) { ctx.font = `600 ${14 * fs}px Segoe UI, Arial, sans-serif`; ctx.textBaseline = "top"; ctx.fillText(spec.title, pad.l + pw / 2, 8 * fs); }
+  if (!cp) {
+    ctx.font = `${13 * fs}px Segoe UI, Arial, sans-serif`; ctx.fillText(spec.xl, pad.l + pw / 2, H - 6 * fs);
+    ctx.save(); ctx.translate(16 * fs, pad.t + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = "middle"; ctx.fillText(spec.yl, 0, 0); ctx.restore();
+    if (spec.title) { ctx.font = `600 ${14 * fs}px Segoe UI, Arial, sans-serif`; ctx.textBaseline = "top"; ctx.fillText(spec.title, pad.l + pw / 2, 8 * fs); }
+  }
   ctx.save(); ctx.beginPath(); ctx.rect(pad.l, pad.t, pw, ph); ctx.clip();
   for (const h of spec.hl || []) { ctx.strokeStyle = h.c || "#777"; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2 * fs; ctx.beginPath(); ctx.moveTo(pad.l, Y(h.y)); ctx.lineTo(pad.l + pw, Y(h.y)); ctx.stroke(); }
   for (const s of spec.series) {
     ctx.strokeStyle = s.c; ctx.lineWidth = (s.w || 1.8) * fs; ctx.setLineDash(s.dash ? s.dash.map(v => v * fs) : []);
     ctx.beginPath(); let pen = false;
-    const stride = Math.max(1, Math.floor(s.y.length / (pw * 2)));
+    const stride = Math.max(1, Math.floor(s.y.length / (pw * 2 * (x1 - x0 > 0 ? Math.max(1, (s.x[s.x.length - 1] - s.x[0]) / (x1 - x0)) : 1))));
     for (let i = 0; i < s.y.length; i += (s.stairs ? 1 : stride)) {
       const px = X(s.x[i]), py = Y(Math.max(Math.min(s.y[i], y1 + (y1 - y0) * 10), y0 - (y1 - y0) * 10));
       if (!isFinite(s.y[i])) { pen = false; continue; }
@@ -560,7 +566,7 @@ function drawPlot(ctx, W, H, spec, opt = {}) {
     ctx.beginPath(); ctx.moveTo(X(spec.playhead), pad.t); ctx.lineTo(X(spec.playhead), pad.t + ph); ctx.stroke();
   }
   ctx.restore(); ctx.setLineDash([]);
-  const items = spec.series.filter(s => s.label).concat((spec.hl || []).filter(h => h.label).map(h => ({label: h.label, c: h.c, dash: [6, 4]})));
+  const items = spec.noLegend ? [] : spec.series.filter(s => s.label).concat((spec.hl || []).filter(h => h.label).map(h => ({label: h.label, c: h.c, dash: [6, 4]})));
   if (items.length) {
     ctx.font = `${12 * fs}px Segoe UI, Arial, sans-serif`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
     const lw = Math.max(...items.map(i => ctx.measureText(i.label).width)) + 44 * fs, lh = 18 * fs;
@@ -574,23 +580,71 @@ function drawPlot(ctx, W, H, spec, opt = {}) {
       ctx.fillStyle = "#111"; ctx.fillText(it.label, lx + 38 * fs, yy);
     });
   }
+  // data tips: marker on the curve + a box in the curve's colour
+  const tipRects = [];
+  for (const tp of spec.tips || []) {
+    if (!(tp.x >= x0 && tp.x <= x1 && tp.y >= y0 && tp.y <= y1)) continue;
+    const mx = X(tp.x), my = Y(tp.y), f2 = (cp ? 0.85 : 1) * fs;
+    ctx.font = `600 ${11.5 * f2}px Segoe UI, Arial, sans-serif`; ctx.textAlign = "left"; ctx.textBaseline = "top";
+    const tw = Math.max(...tp.lines.map(l => ctx.measureText(l).width)) + 12 * f2, th = tp.lines.length * 14 * f2 + 8 * f2;
+    let bx = mx + 10 * f2, by = my - th - 10 * f2;
+    if (bx + tw > pad.l + pw) bx = mx - tw - 10 * f2;
+    if (by < pad.t) by = my + 10 * f2;
+    bx = Math.max(pad.l + 1, Math.min(pad.l + pw - tw - 1, bx)); by = Math.max(pad.t + 1, Math.min(pad.t + ph - th - 1, by));
+    ctx.strokeStyle = tp.c; ctx.lineWidth = 1.2 * f2; ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(bx + (bx > mx ? 0 : tw), by + (by > my ? 0 : th)); ctx.stroke();
+    ctx.fillStyle = tp.c; ctx.fillRect(bx, by, tw, th);
+    ctx.fillStyle = "#fff"; tp.lines.forEach((l, i) => ctx.fillText(l, bx + 6 * f2, by + 4 * f2 + i * 14 * f2));
+    ctx.beginPath(); ctx.arc(mx, my, 4.5 * f2, 0, 2 * Math.PI); ctx.fillStyle = "#fff"; ctx.fill(); ctx.lineWidth = 2.2 * f2; ctx.strokeStyle = tp.c; ctx.stroke();
+    tipRects.push({ref: tp.ref, x: bx, y: by, w: tw, h: th, mx, my});
+  }
   ctx.restore();
-  return {X, Y, x0, x1, y0, y1, pad, pw, ph, inv: (px, py) => [x0 + (px - pad.l) / pw * (x1 - x0), y0 + (1 - (py - pad.t) / ph) * (y1 - y0)]};
+  return {X, Y, x0, x1, y0, y1, pad, pw, ph, tipRects, inv: (px, py) => [x0 + (px - pad.l) / pw * (x1 - x0), y0 + (1 - (py - pad.t) / ph) * (y1 - y0)]};
 }
 
-/* interactive canvas: hover readout, drag-zoom, double-click reset */
+/* full plot; spec.view (if any) is shown as a zoom box on top of the whole figure */
+function drawPlot(ctx, W, H, spec, opt = {}) {
+  const v = spec.view, fs = opt.scale || 1;
+  const g = drawCore(ctx, W, H, Object.assign({}, spec, {view: null}), opt);
+  if (!v) return g;
+  const rx0 = g.X(v.x0), rx1 = g.X(v.x1), ry0 = g.Y(v.y1), ry1 = g.Y(v.y0);
+  const bx = g.pad.l + v.bx * g.pw, by = g.pad.t + v.by * g.ph, bw = v.bw * g.pw, bh = v.bh * g.ph;
+  ctx.save();
+  ctx.strokeStyle = "#0b5cad"; ctx.lineWidth = 1.3 * fs; ctx.setLineDash([5 * fs, 3 * fs]);
+  ctx.fillStyle = "rgba(11,92,173,.06)"; ctx.fillRect(rx0, ry0, rx1 - rx0, ry1 - ry0); ctx.strokeRect(rx0, ry0, rx1 - rx0, ry1 - ry0);
+  const dx = (bx + bw / 2) - (rx0 + rx1) / 2, dy = (by + bh / 2) - (ry0 + ry1) / 2;
+  const pairs = dx * dy > 0 ? [[rx1, ry0, bx + bw, by], [rx0, ry1, bx, by + bh]] : [[rx0, ry0, bx, by], [rx1, ry1, bx + bw, by + bh]];
+  ctx.lineWidth = 1 * fs; ctx.strokeStyle = "rgba(11,92,173,.55)";
+  for (const [a, b, c, d] of pairs) { ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c, d); ctx.stroke(); }
+  ctx.setLineDash([]);
+  ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = 8 * fs; ctx.fillStyle = "#fff"; ctx.fillRect(bx, by, bw, bh); ctx.shadowBlur = 0;
+  ctx.translate(bx, by); ctx.beginPath(); ctx.rect(0, 0, bw, bh); ctx.clip();
+  const gi = drawCore(ctx, bw, bh, Object.assign({}, spec, {title: null, xl: "", yl: "", noLegend: true, view: {x0: v.x0, x1: v.x1, y0: v.y0, y1: v.y1}}), {scale: fs, compact: true});
+  ctx.restore();
+  ctx.save(); ctx.strokeStyle = "#0b5cad"; ctx.lineWidth = 1.6 * fs; ctx.strokeRect(bx, by, bw, bh);
+  if (opt.screen) {
+    ctx.fillStyle = "#0b5cad"; ctx.fillRect(bx + bw - 18, by, 18, 18);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx + bw - 13, by + 5); ctx.lineTo(bx + bw - 5, by + 13); ctx.moveTo(bx + bw - 5, by + 5); ctx.lineTo(bx + bw - 13, by + 13); ctx.stroke();
+    ctx.fillStyle = "rgba(11,92,173,.8)"; ctx.beginPath(); ctx.moveTo(bx + bw, by + bh); ctx.lineTo(bx + bw - 12, by + bh); ctx.lineTo(bx + bw, by + bh - 12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#0b5cad"; ctx.font = "11px Segoe UI, Arial"; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText("zoom · drag to move", bx + 4, by + 3);
+  }
+  ctx.restore();
+  g.inset = {x: bx, y: by, w: bw, h: bh, geo: gi};
+  return g;
+}
+
+/* interactive canvas: hover readout, click = data tip, drag = zoom box (movable, resizable, closable) */
 function attachPlot(canvas, readout, getSpec, figKey, meanEl, getHead) {
-  const st = {geo: null, drag: null};
+  const st = {geo: null, mode: null};
   const render = (rect) => {
     const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
     if (!W || !H) return;
     if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
     const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const spec = getSpec(true); spec.view = VIEW[figKey()] || null; const hd = getHead ? getHead() : null; spec.playhead = hd ? hd.t : null; spec.playheadColor = hd ? hd.c : null;
-    st.geo = drawPlot(ctx, W, H, spec); st.spec = spec;
+    st.geo = drawPlot(ctx, W, H, spec, {screen: true}); st.spec = spec;
     if (meanEl) {
       const v = VIEW[figKey()];
-      if (!v) meanEl.textContent = "Zoom in (drag a rectangle) to get the mean of each curve over the visible time window.";
+      if (!v) meanEl.textContent = "Drag a rectangle to open a zoom box: the mean of each curve over its time window appears here.";
       else {
         const parts = [];
         for (const s of spec.series) {
@@ -602,35 +656,70 @@ function attachPlot(canvas, readout, getSpec, figKey, meanEl, getHead) {
       }
     }
     if (rect) { ctx.fillStyle = "rgba(11,92,173,.12)"; ctx.strokeStyle = "#0b5cad"; ctx.fillRect(rect[0], rect[1], rect[2], rect[3]); ctx.strokeRect(rect[0], rect[1], rect[2], rect[3]); }
-    if (st.hover !== undefined && !rect) { const g = st.geo, px = st.hover; if (px >= g.pad.l && px <= g.pad.l + g.pw) { ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(px, g.pad.t); ctx.lineTo(px, g.pad.t + g.ph); ctx.stroke(); ctx.setLineDash([]); } }
+    if (st.hover !== undefined && !rect) { const g = st.geo, px = st.hover; if (px >= g.pad.l && px <= g.pad.l + g.pw && !inInset(px, st.hoverY)) { ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(px, g.pad.t); ctx.lineTo(px, g.pad.t + g.ph); ctx.stroke(); ctx.setLineDash([]); } }
   };
   const pos = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-  canvas.addEventListener("mousedown", e => { st.drag = pos(e); });
+  const inInset = (x, y) => { const b = st.geo && st.geo.inset; return !!b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h; };
+  const geoAt = (x, y) => inInset(x, y) ? {g: st.geo.inset.geo, ox: st.geo.inset.x, oy: st.geo.inset.y} : {g: st.geo, ox: 0, oy: 0};
+  canvas.addEventListener("mousedown", e => {
+    const p = pos(e), b = st.geo && st.geo.inset, v = VIEW[figKey()];
+    st.start = p; st.moved = false;
+    if (b && v && p[0] >= b.x + b.w - 18 && p[0] <= b.x + b.w && p[1] >= b.y && p[1] <= b.y + 18) { delete VIEW[figKey()]; st.mode = null; render(); return; }
+    if (b && v && p[0] >= b.x + b.w - 14 && p[1] >= b.y + b.h - 14 && inInset(p[0], p[1])) { st.mode = "resize"; st.orig = {...v}; return; }
+    if (b && v && inInset(p[0], p[1])) { st.mode = "move"; st.orig = {...v}; return; }
+    st.mode = "select";
+  });
   canvas.addEventListener("mousemove", e => {
     const p = pos(e);
-    if (st.drag) { render([Math.min(st.drag[0], p[0]), Math.min(st.drag[1], p[1]), Math.abs(p[0] - st.drag[0]), Math.abs(p[1] - st.drag[1])]); return; }
+    if (st.mode) {
+      const dx = p[0] - st.start[0], dy = p[1] - st.start[1]; if (Math.abs(dx) + Math.abs(dy) > 4) st.moved = true;
+      const g = st.geo, v = VIEW[figKey()];
+      if (st.mode === "select") { if (st.moved) render([Math.min(st.start[0], p[0]), Math.min(st.start[1], p[1]), Math.abs(dx), Math.abs(dy)]); return; }
+      if (st.mode === "move" && v) { v.bx = Math.max(0, Math.min(1 - v.bw, st.orig.bx + dx / g.pw)); v.by = Math.max(0, Math.min(1 - v.bh, st.orig.by + dy / g.ph)); render(); return; }
+      if (st.mode === "resize" && v) { v.bw = Math.max(0.18, Math.min(1 - v.bx, st.orig.bw + dx / g.pw)); v.bh = Math.max(0.2, Math.min(1 - v.by, st.orig.bh + dy / g.ph)); render(); return; }
+    }
     if (!st.geo) return;
-    st.hover = p[0]; render();
-    const [tx] = st.geo.inv(p[0], p[1]);
+    st.hover = p[0]; st.hoverY = p[1]; render();
+    const {g, ox, oy} = geoAt(p[0], p[1]);
+    const [tx] = g.inv(p[0] - ox, p[1] - oy);
     const parts = [`t = ${tx.toFixed(2)} s`];
     for (const s of st.spec.series) {
       if (s.x.length < 3 || !s.label) continue;
-      let i = 0, best = Infinity; const dt = s.x[1] - s.x[0], g = Math.round((tx - s.x[0]) / dt);
-      for (let j = Math.max(0, g - 2); j < Math.min(s.x.length, g + 3); j++) if (Math.abs(s.x[j] - tx) < best) { best = Math.abs(s.x[j] - tx); i = j; }
+      let i = 0, best = Infinity; const dt = s.x[1] - s.x[0], k = Math.round((tx - s.x[0]) / dt);
+      for (let j = Math.max(0, k - 2); j < Math.min(s.x.length, k + 3); j++) if (Math.abs(s.x[j] - tx) < best) { best = Math.abs(s.x[j] - tx); i = j; }
       if (best <= dt) parts.push(`${s.label}: ${(+s.y[i]).toPrecision(6)}`);
     }
-    readout.textContent = parts.join("   ·   ");
+    readout.textContent = parts.join("   ·   ") + "   ·   click a curve to mark a value";
   });
   canvas.addEventListener("mouseleave", () => { st.hover = undefined; render(); });
   window.addEventListener("mouseup", e => {
-    if (!st.drag) return; const a = st.drag, b = pos(e); st.drag = null;
-    if (Math.abs(b[0] - a[0]) > 6 && Math.abs(b[1] - a[1]) > 6 && st.geo) {
-      const [xa, ya] = st.geo.inv(Math.min(a[0], b[0]), Math.max(a[1], b[1])), [xb, yb] = st.geo.inv(Math.max(a[0], b[0]), Math.min(a[1], b[1]));
-      VIEW[figKey()] = {x0: xa, x1: xb, y0: ya, y1: yb};
-    }
+    if (!st.mode) return; const mode = st.mode, a = st.start, b = pos(e); st.mode = null;
+    if (mode === "select" && st.moved && Math.abs(b[0] - a[0]) > 6 && Math.abs(b[1] - a[1]) > 6 && st.geo) {
+      const g = st.geo, [xa, ya] = g.inv(Math.min(a[0], b[0]), Math.max(a[1], b[1])), [xb, yb] = g.inv(Math.max(a[0], b[0]), Math.min(a[1], b[1]));
+      const cx = ((a[0] + b[0]) / 2 - g.pad.l) / g.pw, cy = ((a[1] + b[1]) / 2 - g.pad.t) / g.ph, bw = 0.42, bh = 0.46;
+      VIEW[figKey()] = {x0: xa, x1: xb, y0: ya, y1: yb, bw, bh, bx: cx < 0.5 ? 1 - bw - 0.02 : 0.02, by: cy < 0.5 ? 1 - bh - 0.03 : 0.03};
+    } else if (!st.moved && (mode === "select" || mode === "move")) clickAt(a[0], a[1]);
     render();
   });
-  canvas.addEventListener("dblclick", () => { delete VIEW[figKey()]; render(); });
+  function clickAt(x, y) {
+    const {g, ox, oy} = geoAt(x, y), lx = x - ox, ly = y - oy, id = figKey(), F = S.figs[id];
+    F.tips = F.tips || [];
+    const hit = (g.tipRects || []).find(r => (lx >= r.x && lx <= r.x + r.w && ly >= r.y && ly <= r.y + r.h) || Math.hypot(lx - r.mx, ly - r.my) < 7);
+    if (hit) { F.tips.splice(F.tips.indexOf(hit.ref), 1); save(); onDataChanged(); return; }
+    if (lx < g.pad.l || lx > g.pad.l + g.pw || ly < g.pad.t || ly > g.pad.t + g.ph) return;
+    const [tx] = g.inv(lx, ly);
+    let best = null;
+    for (const s of st.spec.series) {
+      if (!s.uid || s.x.length < 3) continue;
+      const dt = s.x[1] - s.x[0], k0 = Math.round((tx - s.x[0]) / dt);
+      for (let k = Math.max(0, k0 - 3); k <= Math.min(s.x.length - 1, k0 + 3); k++) {
+        if (!isFinite(s.y[k])) continue;
+        const d = Math.hypot(g.X(s.x[k]) - lx, g.Y(s.y[k]) - ly);
+        if (!best || d < best.d) best = {d, s, k};
+      }
+    }
+    if (best && best.d < 30) { F.tips.push({uid: best.s.uid, what: st.spec.what, k: best.k}); save(); onDataChanged(); }
+  }
   new ResizeObserver(() => render()).observe(canvas);
   return render;
 }
@@ -644,19 +733,32 @@ function figSpec(id, what, live) {
     const series = [], tmax = Math.max(40, ...all.map(r => r.p.tEnd));
     if (what === "y") series.push({x: [0, 0, tmax], y: [0, 1, 1], c: "#000", w: 1.4, dash: [7, 4], label: "Input (step)"});
     const val = r => what === "y" ? r.y : what === "e" ? r.y.map(v => 1 - v) : r.u;
-    runs.forEach((r, i) => series.push({x: r.t, y: val(r), c: COLORS[i % COLORS.length], label: simLabel(r.p) + (r.m && r.unstable && STUDY ? " (unstable)" : "")}));
+    runs.forEach((r, i) => series.push({x: r.t, y: val(r), c: COLORS[i % COLORS.length], uid: r.p.uid, label: simLabel(r.p) + (r.m && r.unstable && STUDY ? " (unstable)" : "")}));
     if (live && PREVIEW) series.push({x: PREVIEW.t, y: val(PREVIEW), c: "#222", w: 2, dash: [3, 3], label: "Current sliders (not added)"});
     const yl = what === "y" ? "Output y(t)" : what === "e" ? "Error e(t) = 1 − y(t)" : "Controller output u(t)";
     const ylim = what === "u" ? [-50, 50] : [-3, 4];
-    return {title: F.title + (what === "y" ? "" : what === "e" ? " - error" : " - controller output"), xl: "Time (s)", yl, series, xmax: tmax, ylim};
+    const yn = {y: "y", e: "e", u: "u"}[what];
+    return {title: F.title + (what === "y" ? "" : what === "e" ? " - error" : " - controller output"), xl: "Time (s)", yl, series, xmax: tmax, ylim,
+            what, tips: tipsFor(id, what, series, v => `${yn} = ${(+v).toPrecision(4)}`)};
   }
   const rig = RIGS[F.rig]; what = what || "err";
   const series = runs.map((r, i) => ({x: r.t, y: what === "err" ? r.err : what === "pv" ? r.pv : r.out, stairs: what === "out",
-    c: COLORS[i % COLORS.length], label: rigLabel(r)}));
+    c: COLORS[i % COLORS.length], uid: r.uid, label: rigLabel(r)}));
   const hl = what === "err" ? [{y: 0, c: "#777"}] : what === "pv" ? Array.from(new Set(runs.map(r => r.sp))).map(v => ({y: v, c: "#777", label: `Setpoint ${v}`})) : [];
   const yl = what === "err" ? `Error (${rig.unit})` : what === "pv" ? `${rig.pvName} (${rig.unit})` : "Fan PWM (0-255)";
+  const fmt = what === "err" ? v => `e = ${(+v).toFixed(2)} ${rig.unit === "cm" ? "cm" : "counts"}` : what === "pv" ? v => `${rig.unit === "cm" ? "distance" : "reading"} = ${(+v).toFixed(rig.unit === "cm" ? 2 : 1)}` : v => `fan = ${Math.round(+v)}`;
   return {title: F.title + (what === "err" ? "" : what === "pv" ? " - measured output" : " - controller output"), xl: "Time (s)", yl, series, hl,
-          xmax: Math.max(rig.dur, ...runs.map(r => r.n ? r.n * T : 0))};
+          xmax: Math.max(rig.dur, ...runs.map(r => r.n ? r.n * T : 0)), what, tips: tipsFor(id, what, series, fmt)};
+}
+/* data tips of a figure for one plot view: [{x, y, c, lines, ref}] */
+function tipsFor(id, what, series, fmt) {
+  const out = [];
+  for (const tp of S.figs[id].tips || []) {
+    if (tp.what !== what) continue;
+    const s = series.find(x => x.uid && x.uid === tp.uid); if (!s || tp.k >= s.x.length) continue;
+    out.push({x: s.x[tp.k], y: s.y[tp.k], c: s.c, lines: [`t = ${s.x[tp.k].toFixed(2)} s`, fmt(s.y[tp.k])], ref: tp});
+  }
+  return out;
 }
 function rigLabel(r) {
   let s = gl(r);
@@ -691,7 +793,8 @@ function figAction(act, id, what, btn, after) {
   else if (act === "copy") copyFig(id, what, btn);
   else if (act === "csv") { if (S.figs[id].runs.length) download(base + ".csv", figCsv(id), "text/csv"); }
   else if (act === "zoom") { delete VIEW[id]; after(); }
-  else if (act === "clear") { if (S.figs[id].runs.length && confirm("Remove all runs from this figure?")) { S.figs[id].runs = []; delete VIEW[id]; save(); onDataChanged(); after(); } }
+  else if (act === "marks") { S.figs[id].tips = []; save(); onDataChanged(); after(); }
+  else if (act === "clear") { if (S.figs[id].runs.length && confirm("Remove all runs from this figure?")) { S.figs[id].runs = []; S.figs[id].tips = []; delete VIEW[id]; save(); onDataChanged(); after(); } }
 }
 
 /* =====================================================================
@@ -967,6 +1070,7 @@ function schedPreview() {
 }
 function addSim(p, quiet) {
   const bad = validSim(p); if (bad) { alert(bad); return; }
+  p.uid = newUid();
   S.figs[SEL.ex1].runs.push(simRun(p)); PREVIEW = null;
   if (ANIM.ex1) ANIM.ex1.play(S.figs[SEL.ex1].runs.length - 1);
   if (!quiet) { save(); onDataChanged(); refresh1(); }
@@ -1034,11 +1138,11 @@ function buildRig(rig) {
       <div class="row" style="margin-top:0"><span class="hint">Plot:</span>
         <select id="${rig}Show"><option value="err">Error vs time${LAB ? " (for the report)" : ""}</option><option value="pv">Measured output and setpoint</option><option value="out">Fan PWM (controller output)</option></select></div>
       <div class="plotwrap"><canvas id="${rig}Cv"></canvas></div>
-      <div class="readout" id="${rig}Ro">Hover over the plot to read values · drag to zoom · double-click to reset zoom</div>
+      <div class="readout" id="${rig}Ro">Hover to read values · click a curve to mark its value · drag a rectangle to open a zoom box (drag the box to move it, its corner to resize, × to close)</div>
       <div class="readout mean" id="${rig}Rom"></div>
       <div class="row">
         <button class="b" data-act="png">Save PNG</button><button class="b" data-act="copy">Copy image</button>
-        <button class="b" data-act="csv">Save CSV</button><button class="b" data-act="zoom">Reset zoom</button>
+        <button class="b" data-act="csv">Save CSV</button><button class="b" data-act="zoom">Close zoom</button><button class="b" data-act="marks">Clear marks</button>
         <button class="b" data-act="clear">Clear figure</button>
       </div>
       <table class="runs" id="${rig}Tb"></table>
@@ -1348,7 +1452,7 @@ async function rigRun(rig) {
   if (![P, I, D, sp].every(isFinite)) { $(rig + "Phase").textContent = "Check the gains and the setpoint."; return; }
   if (rig === "beam" && (sp < 300 || sp > 700) && !confirm(`Setpoint ${sp} is outside the usual range (400-600). Run anyway?`)) return;
   stopMonitor();
-  const run = {type: "rig", rig, P, I, D, sp, n, source: LINK.isEmu ? "emulator" : "rig", date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
+  const run = {type: "rig", uid: newUid(), rig, P, I, D, sp, n, source: LINK.isEmu ? "emulator" : "rig", date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
   LINK.running = run; LINK.abort = false; updateButtons();
   S.figs[figId].runs.push(run); delete VIEW[figId]; refreshRig(rig);
   let pend = false;
