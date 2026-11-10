@@ -260,7 +260,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 16:35";
+const BUILD = "2026-11-10 16:46";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -850,9 +850,16 @@ function makeAnim(key, o) {
   A.current = () => { const L = A.list(), live = A.live(); if (live) return live; const f = L.find(x => x.id === A.sel) || L[L.length - 1]; return f ? f.run : null; };
   A.refresh = () => {
     const L = A.list(); if (!L.some(x => x.id === A.sel)) { A.sel = L.length ? L[L.length - 1].id : null; A.t = 0; A.playing = false; }
+    A.vis();
     q("src").innerHTML = L.map(x => `<option value="${x.id}"${x.id === A.sel ? " selected" : ""}>${x.label}</option>`).join("") || `<option>no curve yet</option>`;
   };
-  A.play = id => { A.refresh(); A.sel = id; A.refresh(); A.t = 0; A.playing = true; };
+  A.vis = () => {                                     // hide the schematic when no curve of this figure can be animated
+    if (!A.hideWhenEmpty) return true;
+    const show = A.list().length > 0, d = show ? "" : "none";
+    if (A.canvas.style.display !== d) { A.canvas.style.display = A.bar.style.display = d; if (A.plotRender && A.ready) A.plot(); }
+    return show;
+  };
+  A.play = id => { A.refresh(); if (!A.list().some(x => x.id === id)) return; A.sel = id; A.refresh(); A.t = 0; A.playing = true; };
   A.head = () => { const r = A.current(); return r && (A.playing || A.t > 0 || A.live()) ? {t: A.t, c: A.color()} : null; };
   A.color = () => {                                   // same colour as the animated curve on the plot
     const live = A.live(), L = A.list(), src = live ? L.find(x => x.run === live) : (L.find(x => x.id === A.sel) || L[L.length - 1]);
@@ -861,11 +868,12 @@ function makeAnim(key, o) {
   };
   A.plot = () => A.plotRender && A.plotRender();
   A.ui = () => { q("play").textContent = A.playing ? "❚❚ Pause" : "▶ Play"; q("play").disabled = q("rew").disabled = !!A.live(); };
-  A.refresh(); ANIM[key] = A; return A;
+  A.refresh(); A.ready = true; ANIM[key] = A; return A;
 }
 function animLoop(ts) {
   for (const k in ANIM) {
     const A = ANIM[k]; if (!A.tab().classList.contains("on")) { A.prev = ts; continue; }
+    if (!A.vis()) continue;
     const dt = Math.min(0.1, (ts - (A.prev || ts)) / 1000); A.prev = ts;
     const r = A.current(), live = A.live();
     if (r) {
@@ -1006,7 +1014,9 @@ function drawBall(ctx, W, H, f) {
 
 function setupAnimations() {
   makeAnim("ex1", {canvas: $("an1"), bar: $("an1bar"), tab: () => $("tab-ex1"), speeds: [0.5, 1, 2, 5], speed: 2,
-    sources: () => S.figs[SEL.ex1].runs.map((r, i) => ({id: i, label: `#${i + 1}: ${simLabel(r.p)}`, run: r})).concat(PREVIEW ? [{id: "preview", label: "Current sliders", run: PREVIEW}] : []),
+    sources: () => S.figs[SEL.ex1].runs.map((r, i) => ({id: i, label: `#${i + 1}: ${simLabel(r.p)}`, run: r})).concat(PREVIEW ? [{id: "preview", label: "Current sliders", run: PREVIEW}] : [])
+                     .filter(x => x.run.p.sys === "msd"),             // the schematic only exists for the mass-spring-damper
+    hideWhenEmpty: true,
     live: () => null, tEnd: r => r.t[r.t.length - 1],
     frame: (r, t) => { const i = Math.max(0, Math.min(r.y.length - 1, Math.round(t / 0.01))); return {y: r.y[i], u: r.u[i]}; },
     draw: drawMSD, plotRender: () => render1()});
@@ -1062,7 +1072,7 @@ function schedPreview() {
   requestAnimationFrame(() => {
     prevPend = false; const p = readSim(), bad = validSim(p);
     PREVIEW = bad ? null : simRun(p);
-    if (ANIM.ex1 && PREVIEW) ANIM.ex1.play("preview");
+    if (ANIM.ex1) { ANIM.ex1.refresh(); if (PREVIEW) ANIM.ex1.play("preview"); }
     updateTheory(bad ? null : p);
     
     if (render1) render1();
