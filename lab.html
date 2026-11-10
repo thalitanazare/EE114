@@ -266,7 +266,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 17:10";
+const BUILD = "2026-11-10 17:24";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -1603,7 +1603,9 @@ const REPORT = [
     {h: "Closed loop with PI and PID control", qs: [
       ["p4", "Derive the closed-loop characteristic polynomial with a PI controller and show, with the final value theorem, that the steady-state output is 1 for any stabilising P and I."],
       ["p5", "For P = 2 and D = 0, use the Routh criterion to find the range of I for which the closed loop is stable."],
-      ["p6", "With an ideal PID controller, how does D enter the characteristic polynomial? What effect do you expect on damping and on the steady-state value?"]]}]},
+      ["p6", "With an ideal PID controller, how does D enter the characteristic polynomial? What effect do you expect on damping and on the steady-state value?"]]},
+    {h: "Ball in a tube: the weight of the ball", qs: [
+      ["p7", "On the ball-in-a-tube rig the fan needs about 110 PWM (of 255) to keep the ball floating. The ball starts at the bottom, 31 cm from the top, and the setpoint is 10 cm (e = distance − setpoint, u = P·e with P-only control). What is the smallest P that can lift the ball from the bottom? With P = 7, estimate the steady-state error if the ball settles. Why does integral action remove this error?"]]}]},
   {h: "Ex.1: PID control of the mass-spring-damper (bicycle) system", parts: [
     {h: "The effect of proportional action (P)", fig: "f1a", n: 3, qs: [
       ["q1", "Comment on the effect of the proportional controller on the mass-spring-damper system in terms of both its dynamics and the steady-state output (recall that the desired output is 1)."],
@@ -1630,7 +1632,8 @@ const REPORT = [
   {h: "Ex.3: Controlling a practical system: the ball in a tube", parts: [
     {h: "P and PI control", fig: "f3", n: 3, qs: [
       ["q10", "Comment on the effect of including I in the control system."],
-      ["q11", "Comment on the differences between the last two sets of results, i.e. when P is varied while I is kept constant."]]}]},
+      ["q11", "Comment on the differences between the last two sets of results, i.e. when P is varied while I is kept constant."],
+      ["q11b", "Compare the P-only run (P = 7) with your prediction in pre-lab question p7: did the ball reach the setpoint, and how large was the error? Use the fan PWM view to check the drive needed to keep the ball floating."]]}]},
 ];
 const repWhat = (id, w) => w || (FIGS[id].sim ? "y" : "err");
 function figStatus(id, n) {

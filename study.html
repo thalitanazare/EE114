@@ -255,7 +255,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 17:10";
+const BUILD = "2026-11-10 17:24";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -1579,6 +1579,9 @@ const STQ = [
   {id: "a9", q: "On the ball-in-a-tube rig, the interface shows error e = distance − setpoint = +5 cm. Where is the ball, and what should the controller do?",
    opts: ["5 cm above the setpoint; reduce the fan", "5 cm below the setpoint; increase the fan", "At the setpoint; nothing", "It depends on the sign of P"], ans: 1,
    ex: "The distance is measured from the top of the tube, so a larger distance means a lower ball. A positive error means the ball is too low, and with positive gains the controller increases the fan drive."},
+  {id: "a11", q: "A ball-in-a-tube rig (not the lab one) needs 120 PWM to keep its ball floating. The ball starts at the bottom, 30 cm from the top, and the setpoint is 15 cm. With P-only control (u = P·e, e = distance − setpoint), what is the smallest P that lifts the ball from the bottom?",
+   num: 8, tol: 0.25,
+   ex: "At the bottom the error is e = 30 − 15 = 15 cm, so the fan drive is u = 15P. The ball only lifts when u exceeds the 120 PWM needed to balance its weight: P > 120/15 = 8. Even then a P-only controller cannot hold the ball at the setpoint: to keep 120 PWM it needs a permanent error e = 120/P (12 cm with P = 10). The weight acts like a constant disturbance. With integral action, the integral term supplies the 120 PWM while the error goes to zero, so even a small P works (slowly)."},
   {id: "a10", q: "The fan PWM saturates at 255. Why does the firmware stop the integral from growing while the output is saturated (anti-windup)?",
    opts: ["To make the loop faster at the start", "Because the integral of a saturated signal is zero", "Otherwise the integral keeps growing while the fan cannot do more, which causes a large overshoot and a slow recovery once the error changes sign", "To remove the steady-state error"], ans: 2,
    ex: "During saturation, extra integral does not change the fan drive. Without anti-windup, the stored integral must be 'unwound' by an error of the opposite sign before the fan output can come down, which gives a long overshoot. Freezing the integral during saturation avoids this."},
@@ -1611,7 +1614,7 @@ function checkST(q, store) {
   else { v = $("n_" + q.id).value; if (v === "") return; right = Math.abs(+v - q.num) <= q.tol; }
   if (store) { S.st[q.id] = v; save(); }
   $("st_" + q.id).className = "card st " + (right ? "right" : "wrong");
-  $("fb_" + q.id).innerHTML = (right ? `<b class="r">Correct.</b> ` : `<b class="w">Not quite.</b> ${q.opts ? "" : "Try the simulator, then check again. "}`) + (right || q.opts ? q.ex : "");
+  $("fb_" + q.id).innerHTML = (right ? `<b class="r">Correct.</b> ` : `<b class="w">Not quite.</b> ${q.opts ? "" : q.try ? "Try the simulator, then check again. " : "Check your reasoning and try again. "}`) + (right || q.opts ? q.ex : "");
   scoreST();
 }
 function scoreST() {
