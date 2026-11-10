@@ -129,6 +129,7 @@ canvas.anim.tall { height: 240px; }
     
     <button class="b" id="btnEmu">Use emulator</button>
     <select id="emuSpeed" title="Emulator speed"><option value="1">1× (real time)</option><option value="5">5×</option><option value="20">20×</option></select>
+    <label class="hint" style="color:#d9e2ec;display:flex;align-items:center;gap:4px" title="Measurement noise of the emulated sensors (as on the real rigs). Switch it off to compare a run with the dotted model prediction."><input type="checkbox" id="emuNoise" checked> sensor noise</label>
     
     <button class="b" id="btnDisconnect" disabled>Disconnect</button>
   </div>
@@ -255,7 +256,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 17:24";
+const BUILD = "2026-11-10 17:35";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -780,7 +781,7 @@ function tipsFor(id, what, series, fmt) {
 function rigLabel(r) {
   let s = gl(r) + (r.Ts && Math.abs(r.Ts - T) > 1e-9 ? ` · T = ${r.Ts} s` : "");
   if (r.changes && r.changes.length) { const c = r.changes[r.changes.length - 1]; s += ` → tuned to ${gl(c)}`; }
-  return s + (r.source === "emulator" ? " (emulator)" : "") + (r.stopped ? " (stopped)" : "");
+  return s + (r.source === "emulator" ? (r.noise === false ? " (emulator, no sensor noise)" : " (emulator)") : "") + (r.stopped ? " (stopped)" : "");
 }
 function figCanvas(id, what, W = 1600, H = 900) {
   const c = document.createElement("canvas"); c.width = W; c.height = H;
@@ -1376,7 +1377,7 @@ async function rigRun(rig) {
   if (![P, I, D, sp].every(isFinite)) { $(rig + "Phase").textContent = "Check the gains and the setpoint."; return; }
   if (rig === "beam" && (sp < 300 || sp > 700) && !confirm(`Setpoint ${sp} is outside the usual range (400-600). Run anyway?`)) return;
   stopMonitor();
-  const run = {type: "rig", uid: newUid(), rig, P, I, D, sp, n, Ts, source: LINK.isEmu ? "emulator" : "rig", date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
+  const run = {type: "rig", uid: newUid(), rig, P, I, D, sp, n, Ts, source: LINK.isEmu ? "emulator" : "rig", noise: LINK.isEmu && LINK.emu ? LINK.emu.noise !== false : true, date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
   LINK.running = run; LINK.abort = false; updateButtons();
   S.figs[figId].runs.push(run); delete VIEW[figId]; refreshRig(rig);
   let pend = false;
@@ -1455,8 +1456,9 @@ class Emulator {
   write(s) { for (const l of s.split("\n")) if (l.trim()) this.cmd(l.trim()); return Promise.resolve(); }
   measure() {                         // at rest on a stop with the fan off, the reading is steady
     const off = !(this.uLast > 0);
-    if (this.rig === "beam") return 418 + this.beam.x + (off && this.beam.x < 0.5 ? 0.05 : 1.2) * this.gauss();
-    const b = this.ball, d = Math.min(31, b.h + (off && b.h > 30.9 ? 0.02 : 0.6) * this.gauss()); b.hist = [b.hist[1], b.hist[2], d];
+    const nz = this.noise === false ? 0 : 1;
+    if (this.rig === "beam") return 418 + this.beam.x + nz * (off && this.beam.x < 0.5 ? 0.05 : 1.2) * this.gauss();
+    const b = this.ball, d = Math.min(31, b.h + nz * (off && b.h > 30.9 ? 0.02 : 0.6) * this.gauss()); b.hist = [b.hist[1], b.hist[2], d];
     return [...b.hist].sort((p, q) => p - q)[1];
   }
   advance(u) {      // one sample time of plant time, in sub-steps of 0.01 s
@@ -1519,9 +1521,10 @@ function rigPreview(rig) {
   if (RIGPREV[rig] && RIGPREV[rig].key === key) return RIGPREV[rig];
   const n = Math.min(6000, Math.round(dur / Ts)), nsub = Math.max(1, Math.round(Ts / 0.01));
   const t = [], pv = [], out = [], err = [];
-  let I = 0, ep = null, bx = 0, h = 31, v = 0; const bbuf = new Array(34).fill(0), lbuf = new Array(4).fill(0);
+  let I = 0, ep = null, bx = 0, h = 31, v = 0, hist = [31, 31, 31]; const bbuf = new Array(34).fill(0), lbuf = new Array(4).fill(0);
   for (let k = 0; k < n; k++) {
-    const y = rig === "beam" ? 418 + bx : h, e = rig === "ball" ? y - sp : sp - y;
+    if (rig === "ball") hist = [hist[1], hist[2], h];             // same median-of-3 filter as the firmware
+    const y = rig === "beam" ? 418 + bx : [...hist].sort((a, b) => a - b)[1], e = rig === "ball" ? y - sp : sp - y;
     if (ep === null) ep = e;
     const d = g.D * (e - ep) / Ts, In = I + e;
     let u = g.P * e + g.I * Ts * In + d;
@@ -1537,11 +1540,12 @@ function rigPreview(rig) {
 }
 async function connectEmu() {
   const speed = +$("emuSpeed").value;
-  LINK.emu = new Emulator(onLine, speed);
+  LINK.emu = new Emulator(onLine, speed); LINK.emu.noise = $("emuNoise").checked;
   LINK.tr = {write: s => LINK.emu.write(s), close: async () => LINK.emu.close()};
   await handshake(true);
 }
 $("btnEmu").onclick = connectEmu;
+$("emuNoise").onchange = () => { if (LINK.emu) LINK.emu.noise = $("emuNoise").checked; };
 
 /* =====================================================================
    Self-test (study edition only). Systems differ from the lab exercises.
@@ -1582,6 +1586,9 @@ const STQ = [
   {id: "a11", q: "A ball-in-a-tube rig (not the lab one) needs 120 PWM to keep its ball floating. The ball starts at the bottom, 30 cm from the top, and the setpoint is 15 cm. With P-only control (u = P·e, e = distance − setpoint), what is the smallest P that lifts the ball from the bottom?",
    num: 8, tol: 0.25,
    ex: "At the bottom the error is e = 30 − 15 = 15 cm, so the fan drive is u = 15P. The ball only lifts when u exceeds the 120 PWM needed to balance its weight: P > 120/15 = 8. Even then a P-only controller cannot hold the ball at the setpoint: to keep 120 PWM it needs a permanent error e = 120/P (12 cm with P = 10). The weight acts like a constant disturbance. With integral action, the integral term supplies the 120 PWM while the error goes to zero, so even a small P works (slowly)."},
+  {id: "a12", q: "On the emulated ball-in-a-tube, a run with P = 1, I = 0.5 and D = 1 keeps jittering around the setpoint, while the dotted model prediction settles exactly. With “sensor noise” switched off, the run matches the prediction. Why does the derivative term make the noise matter so much?",
+   opts: ["D adds a steady-state error", "D reacts to the change of the error from one sample to the next; the sensor noise (about ±0.6 cm every 0.1 s) looks like a fast change, so D turns it into a jittery fan drive that moves the ball", "D slows the integral down", "The noise only affects the plot, never the ball"], ans: 1,
+   ex: "The derivative term is D·(e(k) − e(k−1))/T. Measurement noise of ±0.6 cm between two samples taken 0.1 s apart looks like a speed of ±6 cm/s, so with D = 1 the fan drive jumps by several PWM at every sample. Part of what you see in the error plot is the noise itself (the plot shows the measurement), and part is real motion of the ball caused by the jittery fan. This is why derivative action is used with care on noisy sensors, often with a low-pass filter on the derivative (like the N = 100 filter of the Simulink PID block)."},
   {id: "a10", q: "The fan PWM saturates at 255. Why does the firmware stop the integral from growing while the output is saturated (anti-windup)?",
    opts: ["To make the loop faster at the start", "Because the integral of a saturated signal is zero", "Otherwise the integral keeps growing while the fan cannot do more, which causes a large overshoot and a slow recovery once the error changes sign", "To remove the steady-state error"], ans: 2,
    ex: "During saturation, extra integral does not change the fan drive. Without anti-windup, the stored integral must be 'unwound' by an error of the opposite sign before the fan output can come down, which gives a long overshoot. Freezing the integral during saturation avoids this."},

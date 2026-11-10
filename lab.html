@@ -266,7 +266,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 17:24";
+const BUILD = "2026-11-10 17:35";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -795,7 +795,7 @@ function tipsFor(id, what, series, fmt) {
 function rigLabel(r) {
   let s = gl(r) + (r.Ts && Math.abs(r.Ts - T) > 1e-9 ? ` · T = ${r.Ts} s` : "");
   if (r.changes && r.changes.length) { const c = r.changes[r.changes.length - 1]; s += ` → tuned to ${gl(c)}`; }
-  return s + (r.source === "emulator" ? " (emulator)" : "") + (r.stopped ? " (stopped)" : "");
+  return s + (r.source === "emulator" ? (r.noise === false ? " (emulator, no sensor noise)" : " (emulator)") : "") + (r.stopped ? " (stopped)" : "");
 }
 function figCanvas(id, what, W = 1600, H = 900) {
   const c = document.createElement("canvas"); c.width = W; c.height = H;
@@ -1533,7 +1533,7 @@ async function rigRun(rig) {
   if (![P, I, D, sp].every(isFinite)) { $(rig + "Phase").textContent = "Check the gains and the setpoint."; return; }
   if (rig === "beam" && (sp < 300 || sp > 700) && !confirm(`Setpoint ${sp} is outside the usual range (400-600). Run anyway?`)) return;
   stopMonitor();
-  const run = {type: "rig", uid: newUid(), rig, P, I, D, sp, n, Ts, source: LINK.isEmu ? "emulator" : "rig", date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
+  const run = {type: "rig", uid: newUid(), rig, P, I, D, sp, n, Ts, source: LINK.isEmu ? "emulator" : "rig", noise: LINK.isEmu && LINK.emu ? LINK.emu.noise !== false : true, date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
   LINK.running = run; LINK.abort = false; updateButtons();
   S.figs[figId].runs.push(run); delete VIEW[figId]; refreshRig(rig);
   let pend = false;
