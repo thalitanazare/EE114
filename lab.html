@@ -249,7 +249,9 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee104-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-$("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED];
+const BUILD = "2026-11-10 15:00";
+$("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
+$("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
 let onDataChanged = () => {};                  // the report hooks in here (lab edition)
 
