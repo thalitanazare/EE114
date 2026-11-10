@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- EE104 Lab 4 interface, study edition. Generated from interface/src/lab4.html: edit the source, not this file. -->
-<title>EE104 Lab 4 · PID Control</title>
+<!-- EE114 Lab 4 interface, study edition. Generated from interface/src/lab4.html: edit the source, not this file. -->
+<title>EE114 Lab 4 · PID Control</title>
 <style>
 :root {
   --bg: #f4f5f7; --card: #ffffff; --ink: #1d232b; --muted: #5d6773; --line: #d9dde3;
@@ -121,7 +121,7 @@ canvas.anim.tall { height: 240px; }
 </head>
 <body>
 <header>
-  <h1>EE104 Lab 4 <small>Investigating PID Control</small><span class="edition" id="edition"></span></h1>
+  <h1>EE114 Lab 4 <small>Investigating PID Control</small><span class="edition" id="edition"></span></h1>
   <div class="conn">
     <span class="status" id="status">Not connected</span>
     
@@ -247,9 +247,9 @@ canvas.anim.tall { height: 240px; }
 const EDITION = "study";                 // replaced by the build: "lab" or "study"
 const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
-const STORE = "ee104-lab4-" + ED + "-v2";
+const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 16:15";
+const BUILD = "2026-11-10 16:23";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -1293,7 +1293,7 @@ class Emulator {
     if (c === "START") { this.started = true; clearInterval(this.ready); return ok(); }
     if (!this.started) return;
     if (c === "STOP") { this.state = "idle"; return ok(); }
-    if (c === "ID?") return this.emit("ID:EE104-LAB4,1.0");
+    if (c === "ID?") return this.emit("ID:EE114-LAB4,1.1");
     if (c === "PV?") {   // beam: assumes the student holds the beam level for the SETPOINT reading
       const v = this.rig === "beam" ? (this.state === "idle" ? 459 + 1.2 * this.gauss() : 418 + this.beam.x) : this.measure();
       return this.emit("PV:" + v.toFixed(2));
