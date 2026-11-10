@@ -88,7 +88,8 @@ pre.log { max-height: 180px; overflow: auto; background: #0f1720; color: #cde; f
 .steplist li.next { border-color: var(--accent); background: #eef4fb; }
 .steplist li.next .n { background: var(--accent); color: #fff; }
 .steplist li.done .n { background: var(--good); color: #fff; }
-.steplist li.done .g { color: var(--muted); }
+.steplist li.done .g, .steplist li.stopped .g { color: var(--muted); }
+.steplist li.stopped .n { background: var(--warn); color: #fff; }
 .steplist button { font-size: 13px; padding: 4px 10px; }
 .stepintro { font-size: 13px; margin: 2px 0 6px; }
 .theory { font: 12.5px/1.55 Consolas, "Courier New", monospace; background: #f7f8fa; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; overflow-x: auto; }
@@ -254,7 +255,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 17:05";
+const BUILD = "2026-11-10 17:10";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -756,6 +757,10 @@ function figSpec(id, what, live) {
   const rig = RIGS[F.rig]; what = what || "err";
   const series = runs.map((r, i) => ({x: r.t, y: what === "err" ? r.err : what === "pv" ? r.pv : r.out, stairs: what === "out",
     c: COLORS[i % COLORS.length], uid: r.uid, label: rigLabel(r)}));
+  if (live && !LINK.running && typeof rigPreview === "function") {
+    const pr = rigPreview(F.rig);
+    if (pr) series.push({x: pr.t, y: what === "err" ? pr.err : what === "pv" ? pr.pv : pr.out, stairs: what === "out", c: "#222", w: 2, dash: [3, 3], label: "Model prediction, current settings (not a measurement)"});
+  }
   const hl = what === "err" ? [{y: 0, c: "#777"}] : what === "pv" ? Array.from(new Set(runs.map(r => r.sp))).map(v => ({y: v, c: "#777", label: `Setpoint ${v}`})) : [];
   const yl = what === "err" ? `Error (${rig.unit})` : what === "pv" ? `${rig.pvName} (${rig.unit})` : "Fan PWM (0-255)";
   const fmt = what === "err" ? v => `e = ${(+v).toFixed(2)} ${rig.unit === "cm" ? "cm" : "counts"}` : what === "pv" ? v => `${rig.unit === "cm" ? "distance" : "reading"} = ${(+v).toFixed(rig.unit === "cm" ? 2 : 1)}` : v => `fan = ${Math.round(+v)}`;
@@ -814,17 +819,26 @@ function figAction(act, id, what, btn, after) {
    no way to run them all at once; a step is ticked when its run is in the figure
    ===================================================================== */
 const sameGains = (a, b) => ["P", "I", "D"].every(k => Math.abs(+a[k] - +b[k]) < 1e-9);
-function stepDone(id, g) {
-  return S.figs[id].runs.some(r => r.type === "sim" ? sameGains(r.p, g) && r.p.sys === "msd" && !(r.p.Ts > 0)
-                                                    : sameGains(r, g) && !r.stopped && !(r.changes && r.changes.length) && Math.abs((r.Ts || T) - T) < 1e-9);
+/* "done": a complete run with the step's gains; "stopped": only interrupted runs (STOP), which also unlock the next step */
+function stepState(id, g) {
+  let st = "";
+  for (const r of S.figs[id].runs) {
+    if (r.type === "sim") { if (sameGains(r.p, g) && r.p.sys === "msd" && !(r.p.Ts > 0)) return "done"; continue; }
+    if (!sameGains(r, g) || (r.changes && r.changes.length) || Math.abs((r.Ts || T) - T) > 1e-9) continue;
+    if (!r.stopped) return "done";
+    st = "stopped";
+  }
+  return st;
 }
+const stepDone = (id, g) => stepState(id, g) === "done";
 function renderSteps(ol, id, verb, act) {
   const steps = FIGS[id].lab || [];
-  const next = steps.findIndex(g => !stepDone(id, g));
+  const states = steps.map(g => stepState(id, g)), next = states.findIndex(x => !x);
   ol.innerHTML = steps.length ? steps.map((g, i) => {
-    const done = stepDone(id, g), cls = done ? "done" : i === next ? "next" : "";
-    return `<li class="${cls}"><span class="n">${done ? "✓" : i + 1}</span><span class="g">${gl(g)}${FIGS[id].rig ? "*" : ""}</span>` +
-           `<button class="b ${i === next ? "p" : ""}" data-step="${i}">${done ? "Again" : verb}</button></li>`;
+    const stt = states[i], cls = stt || (i === next ? "next" : "");
+    return `<li class="${cls}" title="${stt === "stopped" ? "Interrupted with STOP: run it again, or go on to the next step" : ""}"><span class="n">${stt === "done" ? "✓" : stt === "stopped" ? "■" : i + 1}</span>` +
+           `<span class="g">${gl(g)}${FIGS[id].rig ? "*" : ""}${stt === "stopped" ? " · stopped" : ""}</span>` +
+           `<button class="b ${i === next ? "p" : ""}" data-step="${i}">${stt ? "Again" : verb}</button></li>`;
   }).join("") : `<li><span></span><span class="hint">No fixed values: choose them with the sliders and press "Add to figure".</span><span></span></li>`;
   ol.querySelectorAll("[data-step]").forEach(b => b.onclick = () => act(steps[+b.dataset.step]));
   stepLocks(ol);
@@ -837,7 +851,7 @@ function stepLocks(ol) {
     const b = li.querySelector("[data-step]"); if (!b) return;
     b.disabled = !open || (rig && (!LINK.connected || !!LINK.running));
     b.title = open ? "" : "Complete the previous step first";
-    if (!li.classList.contains("done")) open = false;
+    if (!li.classList.contains("done") && !li.classList.contains("stopped")) open = false;
   });
 }
 
@@ -1195,20 +1209,22 @@ function buildRig(rig) {
         <button class="b" data-act="clear">Clear figure</button>
       </div>
       <table class="runs" id="${rig}Tb"></table>
+      <p class="hint">The dotted curve is the prediction of the rig model for the current gains, setpoint and sample time: compare it with the emulated runs.</p>
       <p class="hint">"Mean error" and "error std" are computed over the last 10 s of each run. The std indicates how much the error still oscillates.</p>
     </div>
   </div>`;
   const h = RT[rig] = {render: null};
   $(rig + "SP").value = S.sp[rig];
   $(rig + "SP").onchange = () => { S.sp[rig] = +$(rig + "SP").value; save(); };
-  wireGains(rig, R.max, () => liveTune(rig));
+  wireGains(rig, R.max, () => { liveTune(rig); if (RT[rig].render) RT[rig].render(); });
+  for (const k of ["SP", "Ts", "Dur"]) $(rig + k).addEventListener("input", () => RT[rig].render && RT[rig].render());
   setGains(rig, R.max, FIGS[R.figs[0]].lab[0]);
   $(rig + "Show").onchange = () => { SHOW[rig] = $(rig + "Show").value; h.render(); };
   $(rig + "Mon").onclick = () => toggleMonitor(rig);
   if (isBeam) $(rig + "Cap").onclick = () => { const v = MON.last; if (v == null) return; const r = Math.round(v); $(rig + "SP").value = r; S.sp.beam = r; S.beamSPmeasured = r; save(); onDataChanged(); };
   $(rig + "Go").onclick = () => rigRun(rig);
   $(rig + "Stop").onclick = () => rigStop();
-  h.render = attachPlot($(rig + "Cv"), $(rig + "Ro"), () => figSpec(SEL[rig], SHOW[rig]), () => SEL[rig], $(rig + "Rom"), () => ANIM[rig] ? ANIM[rig].head() : null);
+  h.render = attachPlot($(rig + "Cv"), $(rig + "Ro"), live => figSpec(SEL[rig], SHOW[rig], live), () => SEL[rig], $(rig + "Rom"), () => ANIM[rig] ? ANIM[rig].head() : null);
   el.querySelectorAll("[data-act]").forEach(b => b.onclick = () => figAction(b.dataset.act, SEL[rig], SHOW[rig], b, () => refreshRig(rig)));
   refreshRig(rig);
 }
@@ -1493,6 +1509,31 @@ class Emulator {
     }
     err("unknown cmd");
   }
+}
+/* deterministic model of the rigs (the emulator's plant without noise), started from rest */
+const RIGPREV = {};
+function rigPreview(rig) {
+  const g = readGains(rig), sp = +$(rig + "SP").value, Ts = +$(rig + "Ts").value || T, dur = Math.min(600, Math.max(5, +$(rig + "Dur").value || RIGS[rig].dur));
+  if (![g.P, g.I, g.D, sp].every(isFinite)) return null;
+  const key = JSON.stringify([g, sp, Ts, dur, S.aw]);
+  if (RIGPREV[rig] && RIGPREV[rig].key === key) return RIGPREV[rig];
+  const n = Math.min(6000, Math.round(dur / Ts)), nsub = Math.max(1, Math.round(Ts / 0.01));
+  const t = [], pv = [], out = [], err = [];
+  let I = 0, ep = null, bx = 0, h = 31, v = 0; const bbuf = new Array(34).fill(0), lbuf = new Array(4).fill(0);
+  for (let k = 0; k < n; k++) {
+    const y = rig === "beam" ? 418 + bx : h, e = rig === "ball" ? y - sp : sp - y;
+    if (ep === null) ep = e;
+    const d = g.D * (e - ep) / Ts, In = I + e;
+    let u = g.P * e + g.I * Ts * In + d;
+    if (S.aw && ((u > 255 && e > 0) || (u < 0 && e < 0))) u = g.P * e + g.I * Ts * I + d; else I = In;
+    u = Math.min(255, Math.max(0, u)); ep = e;
+    t.push(+(k * Ts).toFixed(4)); pv.push(y); out.push(u); err.push(e);
+    for (let j = 0; j < nsub; j++) {
+      if (rig === "beam") { bbuf.push(u); const ub = bbuf.shift(); bx += 0.01 / 0.776 * (-bx + 2.2226 * Math.max(0, ub - 73.09)); bx = Math.min(218, Math.max(0, bx)); }
+      else { lbuf.push(u); const ul = lbuf.shift(); v += 0.01 / 2.709 * (-v + (ul - 110.4)); h += -7.73 * v * 0.01; if (h < 3 || h > 31) { h = Math.min(31, Math.max(3, h)); v = 0; } }
+    }
+  }
+  return (RIGPREV[rig] = {key, t, pv, out, err});
 }
 async function connectEmu() {
   const speed = +$("emuSpeed").value;
