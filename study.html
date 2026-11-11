@@ -145,7 +145,7 @@ canvas.anim.tall { height: 240px; }
     <select id="emuSpeed" title="Emulator speed"><option value="1">1× (real time)</option><option value="5">5×</option><option value="20">20×</option></select>
     
     <button class="b" id="btnDisconnect" disabled>Disconnect</button>
-    
+    <button class="b" id="btnEnd" title="Delete all runs and answers on this PC and start again">End session</button>
   </div>
 </header>
 <nav id="nav">
@@ -171,6 +171,7 @@ canvas.anim.tall { height: 240px; }
       <li><b>Self-test</b>: questions on other systems, with feedback. Try each one in the simulator before answering.</li>
     </ol>
     <div class="note">The emulator uses models identified on the lab rigs. It reproduces their behaviour only roughly, so expect different numbers on the real rigs.</div>
+    <p class="hint">Your runs and answers are kept on this computer only. They are deleted after 4 hours without use, or at once with "End session" (top right).</p>
   </div>
   
   
@@ -271,12 +272,20 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 14:49";
+const BUILD = "2026-11-11 14:55";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
 let onDataChanged = () => {};                  // the report hooks in here (lab edition)
 const NOT_CONN = LAB ? "Connect to the Arduino first." : "Press “Use emulator” first.";
+/* Each PC (each browser) keeps its own work; nothing is shared between PCs. The work is kept, so closing the
+   page by mistake loses nothing, but work not touched for KEEP_HOURS is discarded when the page opens, so the
+   next group (or the next study session) starts empty. "End session" deletes it at once. */
+const KEEP_HOURS = 4;
+function endSession() {
+  try { localStorage.removeItem(STORE); sessionStorage.removeItem("ee114-lab4-open"); } catch (e) {}
+  location.reload();
+}
 
 
 /* =====================================================================
@@ -347,7 +356,7 @@ function load() {
   try {
     const raw = localStorage.getItem(STORE); if (!raw) return;
     const st = JSON.parse(raw);
-    
+    if (!st.savedAt || Date.now() - st.savedAt > KEEP_HOURS * 3600e3) { localStorage.removeItem(STORE); return; }   // an earlier session
     for (const id in FIGS) if (st.figs && st.figs[id]) st.figs[id].runs = st.figs[id].runs.filter(r => r.type !== "sim" || PLANTS[r.p.sys]).map(r => r.type === "sim" ? simRun(r.p) : r);
     for (const id in st.figs || {}) if (!FIGS[id]) delete st.figs[id];
     S = Object.assign(S, st);
@@ -1731,6 +1740,13 @@ function showTab(t) {
 }
 document.querySelectorAll("#nav button").forEach(b => b.onclick = () => { showTab(b.dataset.tab); if ($("backRep") && b.dataset.tab === "report") $("backRep").hidden = true; });
 
+$("btnEnd").onclick = async () => {
+  if (LINK.running) { alert("Stop the run first."); return; }
+  if (!confirm(LAB ? "End the session?\n\nAll runs, figures and answers stored on this PC are deleted, and the page goes back to the password screen.\nSave your report as PDF first (Report tab)."
+                   : "End the session?\n\nAll runs, figures and self-test answers stored on this PC are deleted.")) return;
+  if (LINK.connected) { try { await disconnect(); } catch (e) {} }
+  endSession();
+};
 $("btnDisconnect").onclick = disconnect;
 if ("serial" in navigator) navigator.serial.addEventListener("disconnect", e => { if (e.target === LINK.port) linkLost(); });
 window.addEventListener("beforeunload", () => { if (LINK.tr) try { LINK.tr.write("STOP\n"); } catch (e) {} });
