@@ -106,6 +106,11 @@ canvas.anim.tall { height: 240px; }
 .animbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 10px; font-size: 13px; }
 .animbar button { font-size: 13px; padding: 3px 10px; }
 .animbar select { font-size: 13px; padding: 2px 4px; }
+.conncard { border: 1px solid var(--line); border-left: 5px solid var(--bad); border-radius: 6px; padding: 8px 10px; margin: 0 0 12px; background: #fbfcfe; }
+.conncard.ok { border-left-color: var(--good); } .conncard.warn { border-left-color: var(--warn); }
+.conncard .row { margin: 6px 0 0; }
+.conncard b { font-size: 14px; }
+
 #print { display: none; }
 @media print {
   body { background: #fff; }
@@ -234,6 +239,7 @@ canvas.anim.tall { height: 240px; }
 
 </main>
 
+
 <div id="print"></div>
 <div class="overlay" id="flashBox" hidden>
   <div class="card">
@@ -255,12 +261,13 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 11:55";
+const BUILD = "2026-11-11 12:00";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
 let onDataChanged = () => {};                  // the report hooks in here (lab edition)
-const NOT_CONN = LAB ? "Connect to the Arduino first." : "Press “Use emulator” (top right) first.";
+const NOT_CONN = LAB ? "Connect to the Arduino first." : "Press “Use emulator” first.";
+
 
 /* =====================================================================
    Constants, plants, figure definitions and stored state
@@ -1198,6 +1205,11 @@ function buildRig(rig) {
     <div>
       <div class="card">
         <h2>${isBeam ? "Ex.2 · Balance beam" : "Ex.3 · Ball in a tube"}</h2>
+        <div class="conncard" id="${rig}Conn">
+          <b id="${rig}ConnTitle">Not connected</b>
+          <div class="hint" id="${rig}ConnInfo"></div>
+          <div class="row"><button class="b p" id="${rig}ConnBtn"></button><button class="b fw" id="${rig}FlashBtn" hidden>Install Lab 4 firmware</button></div>
+        </div>
         <p class="hint">${isBeam ? "The fan (PWM pin 5) lifts the beam; the pivot potentiometer (A4) gives the beam position in ADC counts (0-1023 for 0-5 V). Error e = setpoint − reading."
                                   : "The fan (PWM pin 5) lifts the ball; the ultrasonic sensor at the top gives the ball's distance from the top in cm. Error e = distance − setpoint (positive when the ball is too low)."}</p>
         <h3>${isBeam ? "Step 2 · Find the SETPOINT (level beam)" : "Setpoint"}</h3>
@@ -1253,6 +1265,8 @@ function buildRig(rig) {
   for (const k of ["SP", "Ts", "Dur"]) $(rig + k).addEventListener("input", () => { updateRigTheory(rig); if (RT[rig].render) RT[rig].render(); });
   setGains(rig, R.max, FIGS[R.figs[0]].lab[0]);
   $(rig + "Show").onchange = () => { SHOW[rig] = $(rig + "Show").value; h.render(); };
+  $(rig + "ConnBtn").onclick = connAction;
+  $(rig + "FlashBtn").onclick = () => { if (typeof installFirmware === "function") installFirmware(); };
   if ($(rig + "Noise")) $(rig + "Noise").onchange = () => { if (LINK.emu && LINK.emu.noise) LINK.emu.noise[rig] = $(rig + "Noise").checked; };
   $(rig + "Mon").onclick = () => toggleMonitor(rig);
   if (isBeam) $(rig + "Cap").onclick = () => { const v = MON.last; if (v == null) return; const r = Math.round(v); $(rig + "SP").value = r; S.sp.beam = r; S.beamSPmeasured = r; save(); onDataChanged(); };
@@ -1318,7 +1332,7 @@ async function send(c) { if (!LINK.tr) throw new Error("not connected"); if (!c.
 async function cmd(c, ms = 3000) { const p = waitFor(l => l === "OK" || l.startsWith("ERR"), ms); await send(c); const r = await p; if (r !== "OK") throw new Error(`${c} → ${r}`); }
 async function query(c, prefix, ms = 2000) { const p = waitFor(l => l.startsWith(prefix), ms); await send(c); return (await p).slice(prefix.length); }
 function exclusive(fn) { const run = LINK.lock.then(fn, fn); LINK.lock = run.catch(() => {}); return run; }
-async function setMode(rig) { if (LINK.mode !== rig) { await cmd("MODE:" + rig.toUpperCase()); LINK.mode = rig; } }
+async function setMode(rig) { if (LINK.mode !== rig) { await cmd("MODE:" + rig.toUpperCase()); LINK.mode = rig; } LINK.usedFor = rig; }
 
 
 async function handshake(emu) {
@@ -1331,16 +1345,19 @@ async function handshake(emu) {
     try { id = await query("ID?", "ID:", 1500); } catch (e) { id = ""; }
     $("fwinfo").textContent = id ? `Firmware: ${id}${emu ? " (emulated)" : ""}` : "Firmware did not answer ID?: it may not be the Lab 4 firmware. Ask a demonstrator.";
     LINK.connected = true;
-    LINK.lab4fw = !!id;
+    LINK.lab4fw = !!id; LINK.fwId = id;
+    if (!emu) document.body.classList.remove("locked");
     const fwOK = typeof FW !== "undefined" && FW.ok;
     const ver = id.split(",")[1] || "", old = !!id && fwOK && verLess(ver, FW.version);
     if (emu) setStatus(`Emulator connected (${LINK.emu.speed}×)`, "warn");
     else if (!id) setStatus("Connected · not the Lab 4 firmware: press “Install Lab 4 firmware”", "warn");
     else if (old) setStatus(`Connected · firmware ${ver} is older than ${FW.version}: press “Install Lab 4 firmware”`, "warn");
     else setStatus("Arduino connected", "good");
-    if ($("btnFlash")) $("btnFlash").hidden = emu || !fwOK || (!!id && !old);
+    LINK.needFw = !emu && fwOK && (!id || old);
+    if ($("btnFlash")) $("btnFlash").hidden = !LINK.needFw;
   } catch (e) {
     setStatus("No answer from the board. Check the COM port and that the Lab 4 firmware is installed.", "bad");
+    if ($("lockMsg")) $("lockMsg").textContent = "No answer from the board on that port. Check the cable and choose the Nano's port.";
     await disconnect();
   }
   updateButtons();
@@ -1354,7 +1371,31 @@ async function disconnect() {
   if (LINK.running) { LINK.running.lost = true; onLine("__LOST__"); }
   setStatus("Not connected"); if ($("btnFlash")) $("btnFlash").hidden = true; updateButtons();
 }
+/* connection card at the top of each rig tab: connect, change board, install firmware without going back to Start */
+function updateConnCards() {
+  for (const rig in RIGS) {
+    const card = $(rig + "Conn"); if (!card) continue;
+    const name = rig === "beam" ? "balance beam" : "ball-in-a-tube", c = LINK.connected, emu = LINK.isEmu, real = LAB;
+    const other = c && LINK.usedFor && LINK.usedFor !== rig, fw = c && !emu && LINK.needFw;
+    card.className = "conncard " + (!c ? "" : fw || other ? "warn" : "ok");
+    $(rig + "ConnTitle").textContent = !c ? "Not connected" : emu ? "Emulator connected" : fw ? "Connected · the board needs the Lab 4 firmware" : "Arduino connected";
+    $(rig + "ConnInfo").textContent = !c ? (real ? `Connect the Arduino of the ${name} rig by USB.` : "Use the emulator to rehearse the procedure.")
+      : (emu ? "Simulated rig and Nano." : `${LINK.fwId ? "Firmware " + LINK.fwId : "Unknown firmware"}${LINK.portInfo ? " · " + LINK.portInfo : ""}.`) +
+        (other ? ` This board was last used for the ${LINK.usedFor === "beam" ? "balance beam" : "ball in a tube"}: if you have moved to the ${name} rig, press “Change board”.` : "");
+    const btn = $(rig + "ConnBtn");
+    btn.textContent = !c ? (real ? `Connect the ${rig === "beam" ? "beam" : "ball"} rig` : "Use emulator") : (emu ? "Disconnect emulator" : "Change board");
+    btn.disabled = !!LINK.running;
+    $(rig + "FlashBtn").hidden = !fw;
+  }
+}
+async function connAction() {
+  if (LINK.running) return;
+  if (LINK.connected) { const wasEmu = LINK.isEmu; await disconnect(); if (wasEmu || !LAB) return; }
+  
+  await connectEmu();
+}
 function updateButtons() {
+  updateConnCards();
   const c = LINK.connected, busy = !!LINK.running;
   if ($("btnConnect")) $("btnConnect").disabled = c;
   $("btnDisconnect").disabled = !c;
@@ -1665,6 +1706,7 @@ function showTab(t) {
   if (t === "report" && typeof buildReport === "function") buildReport();
   if (t === "ex1") render1(); for (const rig in RT) if (RIGS[rig].tab === t) RT[rig].render();
   if (MON.rig && RIGS[MON.rig].tab !== t) stopMonitor();
+  updateConnCards();
 }
 document.querySelectorAll("#nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
