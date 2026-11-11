@@ -187,7 +187,7 @@ canvas.anim.tall { height: 240px; }
           <option value="0.1">digital, T = 0.1 s</option><option value="0.2">digital, T = 0.2 s</option><option value="0.5">digital, T = 0.5 s</option>
         </select></label>
         <div class="metrics" id="sMetrics"></div>
-        <h3>Closed loop for the current sliders</h3>
+        <h3 id="sTheoryH">Closed loop</h3>
         <div class="theory" id="sTheory"></div>
         <canvas id="pz" class="pz"></canvas>
         <p class="hint">Pole map: × closed-loop poles, ○ zeros. Shaded left half-plane = stable. Ideal derivative assumed (the simulation filters it with N = 100).</p>
@@ -255,7 +255,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-10 17:42";
+const BUILD = "2026-11-11 11:50";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -440,8 +440,21 @@ function plantTF(sys, q) {
     case "so":    return {num: [q.K * q.wn * q.wn], den: [1, 2 * q.zeta * q.wn, q.wn * q.wn], txt: `${fmtC(q.K * q.wn * q.wn)} / (${polyStr([1, 2 * q.zeta * q.wn, q.wn * q.wn])})`};
     case "integ": return {num: [q.K], den: [q.tau, 1, 0], txt: `${fmtC(q.K)} / (${polyStr([q.tau, 1, 0])})`};
     case "third": return {num: [1], den: [1, 3, 3, 1], txt: "1 / (s+1)³"};
-    default:      return null;           // pure delay: not a rational transfer function
+    case "fopdt": { const pd = padeP(q.L);
+      return {num: mulP([q.K], pd.n), den: mulP([q.tau, 1], pd.d), pade: q.L, txt: `${fmtC(q.K)}·e^(−${fmtC(q.L)}s) / (${polyStr([q.tau, 1])})`}; }
+    default:      return null;
   }
+}
+/* second-order Pade approximation of a delay: e^(-th s) ≈ (1 - th s/2 + th² s²/12)/(1 + th s/2 + th² s²/12) */
+const padeP = th => ({n: [th * th / 12, -th / 2, 1], d: [th * th / 12, th / 2, 1]});
+/* linearised models of the lab rigs (identified on the rigs; the emulator uses the same values).
+   The delay includes the transport/fan delay, half a sample (zero-order hold) and, for the ball,
+   about one sample for the median-of-3 sensor filter. */
+function rigTF(rig, Ts) {
+  if (rig === "ball") { const th = 0.04 + 1.5 * Ts, pd = padeP(th);
+    return {num: mulP([7.73], pd.n), den: mulP([2.709, 1, 0], pd.d), pade: th, txt: `7.73·e^(−${fmtC(th)}s) / (s(2.709s + 1))   [fan PWM → ball height, cm]`}; }
+  const th = 0.34 + Ts / 2, pd = padeP(th);
+  return {num: mulP([2.2226], pd.n), den: mulP([0.776, 1], pd.d), pade: th, txt: `2.22·e^(−${fmtC(th)}s) / (0.776s + 1)   [fan PWM → beam reading, counts]`};
 }
 const trimP = a => { let i = 0; while (i < a.length - 1 && Math.abs(a[i]) < 1e-12) i++; return a.slice(i); };
 function addP(a, b) { const n = Math.max(a.length, b.length), r = new Array(n).fill(0); a.forEach((v, i) => r[n - a.length + i] += v); b.forEach((v, i) => r[n - b.length + i] += v); return trimP(r); }
@@ -477,8 +490,9 @@ function rootsP(c) {                       // Durand-Kerner
   const tiny = v => Math.abs(v) < 1e-7 * Math.max(1, R) ? 0 : v;
   return z.map(r => [tiny(r[0]), tiny(r[1])]).sort((p, q) => q[0] - p[0] || q[1] - p[1]);
 }
-function closedLoop(p) {
-  const G = plantTF(p.sys, p.pp); if (!G) return null;
+function closedLoop(p) { return closedLoopG(plantTF(p.sys, p.pp), p); }
+function closedLoopG(G, p) {
+  if (!G) return null;
   const P = +p.P, I = +p.I, D = +p.D;
   const cNum = I !== 0 ? trimP([D, P, I]) : trimP([D, P]), cDen = I !== 0 ? [1, 0] : [1];
   const num = mulP(G.num, cNum), den = addP(mulP(G.den, cDen), num);
@@ -490,9 +504,10 @@ function drawPZ(canvas, cl) {
   const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight; if (!W) return;
   canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-  if (!cl) { ctx.fillStyle = "#5d6773"; ctx.font = "12px Segoe UI, Arial"; ctx.fillText("No pole map: a time delay is not a rational transfer function.", 8, H / 2); return; }
-  const pts = cl.poles.concat(cl.zeros);
-  let m = Math.max(1, ...pts.map(z => Math.max(Math.abs(z[0]), Math.abs(z[1])))) * 1.25;
+  if (!cl) { ctx.fillStyle = "#5d6773"; ctx.font = "12px Segoe UI, Arial"; ctx.fillText("—", 8, H / 2); return; }
+  // frame the dominant poles (closest to the imaginary axis); far poles/zeros are drawn on the edge with their value
+  const dom = [...cl.poles].sort((p, q) => q[0] - p[0]).slice(0, 3).concat(cl.zeros.filter(z => Math.hypot(z[0], z[1]) < 5));
+  let m = Math.max(1, ...dom.map(z => Math.max(Math.abs(z[0]), Math.abs(z[1])))) * 1.4;
   const sc = Math.min(W / (2 * m), H / (2 * m)), X = x => W / 2 + x * sc, Y = y => H / 2 - y * sc;
   ctx.fillStyle = "rgba(19,122,63,.07)"; ctx.fillRect(0, 0, W / 2, H);
   ctx.fillStyle = "rgba(180,35,24,.06)"; ctx.fillRect(W / 2, 0, W / 2, H);
@@ -501,20 +516,38 @@ function drawPZ(canvas, cl) {
   const tick = niceTicks(0, m, 3).step; ctx.textAlign = "center";
   for (let v = tick; v < m; v += tick) { ctx.fillText(fmtTick(-v, tick), X(-v), H / 2 + 12); ctx.fillText(fmtTick(v, tick), X(v), H / 2 + 12); }
   ctx.lineWidth = 2;
-  cl.zeros.forEach(z => { ctx.strokeStyle = "#0072B2"; ctx.beginPath(); ctx.arc(X(z[0]), Y(z[1]), 5, 0, 2 * Math.PI); ctx.stroke(); });
-  cl.poles.forEach(z => { ctx.strokeStyle = z[0] > 1e-9 ? "#b42318" : "#111"; const x = X(z[0]), y = Y(z[1]); ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y + 5); ctx.moveTo(x + 5, y - 5); ctx.lineTo(x - 5, y + 5); ctx.stroke(); });
+  const place = z => {                      // clamp far points to the edge and label them
+    const out = Math.abs(z[0]) > m || Math.abs(z[1]) > m, k = out ? 0.94 * m / Math.max(Math.abs(z[0]), Math.abs(z[1])) : 1;
+    return {x: X(z[0] * k), y: Y(z[1] * k), out};
+  };
+  ctx.font = "10px Segoe UI, Arial";
+  const tag = (q, z, col) => { if (!q.out) return; ctx.fillStyle = col; ctx.textAlign = q.x > W / 2 ? "right" : "left"; ctx.fillText(cStr(z), q.x + (q.x > W / 2 ? -8 : 8), q.y + (z[1] > 0 ? 12 : z[1] < 0 ? -6 : -8)); };
+  cl.zeros.forEach(z => { const q = place(z); ctx.strokeStyle = "#0072B2"; ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, 2 * Math.PI); ctx.stroke(); if (z[1] >= 0) tag(q, z, "#0072B2"); });
+  cl.poles.forEach(z => { const q = place(z), x = q.x, y = q.y; ctx.strokeStyle = z[0] > 1e-9 ? "#b42318" : "#111"; ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y + 5); ctx.moveTo(x + 5, y - 5); ctx.lineTo(x - 5, y + 5); ctx.stroke(); if (z[1] >= 0) tag(q, z, "#111"); });
 }
-function updateTheory(p) {
-  const el = $("sTheory"); if (!el) return;
-  const cl = p ? closedLoop(p) : null;
-  if (!p) { el.textContent = "—"; drawPZ($("pz"), null); return; }
-  if (!cl) { el.innerHTML = "G(s) contains a time delay e^(−Ls): no rational closed-loop transfer function."; drawPZ($("pz"), null); return; }
+function renderTheory(el, cvs, cl, title, notes) {
+  if (!el) return;
+  if (cvs && !cvs._ro) { cvs._ro = new ResizeObserver(() => drawPZ(cvs, cvs._cl)); cvs._ro.observe(cvs); }   // redraw when the tab becomes visible
+  if (cvs) cvs._cl = cl;
+  if (!cl) { el.textContent = "—"; drawPZ(cvs, null); return; }
   const C = cl.cDen.length > 1 ? `(${polyStr(cl.cNum)}) / s` : polyStr(cl.cNum);
   const maxRe = Math.max(...cl.poles.map(z => z[0]));
   const stab = maxRe < -1e-6 ? `<span class="st">stable</span>` : maxRe > 1e-6 ? `<span class="un">unstable</span>` : `<b>marginally stable</b>`;
-  el.innerHTML = `G(s) = ${cl.G.txt}\nC(s) = ${C}\n<b>Y(s)/R(s) = (${polyStr(cl.num)}) / (${polyStr(cl.den)})</b>\nPoles: ${poleList(cl.poles)}  → ${stab}` +
-    (p.Ts > 0 ? `\n<i>Digital PID, T = ${p.Ts} s: these are the poles of the continuous loop. Sampling adds a delay of about T/2, which reduces damping and can destabilise the loop.</i>` : "");
-  drawPZ($("pz"), cl);
+  el.innerHTML = (title ? `<i>${title}</i>\n` : "") + `G(s) = ${cl.G.txt}\nC(s) = ${C}\n<b>Y(s)/R(s) = (${polyStr(cl.num)}) / (${polyStr(cl.den)})</b>\nPoles: ${poleList(cl.poles)}  → ${stab}` +
+    (cl.G.pade ? `\n<i>The delay e^(−${fmtC(cl.G.pade)}s) is approximated by a 2nd-order Padé function: it adds two poles on the left and two zeros on the right of the pole map.</i>` : "") +
+    (notes ? `\n<i>${notes}</i>` : "");
+  drawPZ(cvs, cl);
+}
+function updateTheory(p, title) {
+  renderTheory($("sTheory"), $("pz"), p ? closedLoop(p) : null, title,
+    p && p.Ts > 0 ? `Digital PID, T = ${p.Ts} s: these are the poles of the continuous loop. Sampling adds a delay of about T/2, which reduces damping and can destabilise the loop.` : "");
+}
+/* rigs: linearised model, for the given gains and sample time */
+function updateRigTheory(rig, g, Ts, title) {
+  g = g || readGains(rig); Ts = Ts || +$(rig + "Ts").value || T;
+  const cl = closedLoopG(rigTF(rig, Ts), g), unst = cl && Math.max(...cl.poles.map(z => z[0])) > 1e-6;
+  renderTheory($(rig + "Theory"), $(rig + "Pz"), cl, title || "Current settings",
+    unst ? `Unstable linear model: on the rig the oscillation cannot grow without limit. It keeps going with a bounded amplitude (a limit cycle), limited by the fan saturation and ${rig === "ball" ? "the ends of the tube" : "the end stops of the beam"}.` : "");
 }
 
 /* =====================================================================
@@ -870,7 +903,7 @@ function makeAnim(key, o) {
   const q = a => A.bar.querySelector(`[data-a="${a}"]`);
   q("play").onclick = () => { const r = A.current(); if (!r || A.live()) return; if (!A.playing && A.t >= A.tEnd(r) - 1e-9) A.t = 0; A.playing = !A.playing; };
   q("rew").onclick = () => { if (A.live()) return; A.t = 0; A.playing = false; A.plot(); };
-  q("src").onchange = () => { A.sel = q("src").value === "preview" ? "preview" : +q("src").value; A.t = 0; A.playing = true; };
+  q("src").onchange = () => { A.sel = q("src").value === "preview" ? "preview" : +q("src").value; A.t = 0; A.playing = true; if (A.onSelect) A.onSelect(A.current(), A.sel); };
   q("spd").onchange = () => { A.speed = +q("spd").value; };
   A.list = () => A.sources();                          // [{id, label, run}]
   A.current = () => { const L = A.list(), live = A.live(); if (live) return live; const f = L.find(x => x.id === A.sel) || L[L.length - 1]; return f ? f.run : null; };
@@ -1071,13 +1104,15 @@ function setupAnimations() {
     hideWhenEmpty: true,
     live: () => null, tEnd: r => r.t[r.t.length - 1],
     frame: (r, t) => { const i = Math.max(0, Math.min(r.y.length - 1, Math.round(t / 0.01))); return {y: r.y[i], u: r.u[i]}; },
-    draw: drawMSD, plotRender: () => render1()});
+    draw: drawMSD, plotRender: () => render1(),
+    onSelect: (r, id) => { if (r) updateTheory(r.p, id === "preview" ? "Current sliders" : `Run #${id + 1}: ${simLabel(r.p)}`); }});
   for (const rig of ["beam", "ball"]) makeAnim(rig, {canvas: $(rig + "An"), bar: $(rig + "AnBar"), tab: () => $("tab-" + RIGS[rig].tab), speeds: [1, 2, 5], speed: 1,
     sources: () => S.figs[SEL[rig]].runs.map((r, i) => ({id: i, label: `#${i + 1}: ${gl(r)}`, run: r})),
     live: () => LINK.running && LINK.running.rig === rig && S.figs[SEL[rig]].runs.includes(LINK.running) ? LINK.running : null,
     tEnd: r => r.t.length ? r.t[r.t.length - 1] : 0,
     frame: (r, t) => { if (!r.t.length) return null; const i = Math.max(0, Math.min(r.t.length - 1, Math.floor(t / (r.Ts || T) + 1e-6))); return {pv: r.pv[i], fan: r.out[i], sp: r.sp}; },
-    draw: rig === "beam" ? drawBeam : drawBall, plotRender: () => RT[rig].render()});
+    draw: rig === "beam" ? drawBeam : drawBall, plotRender: () => RT[rig].render(),
+    onSelect: (r, id) => { if (r) updateRigTheory(rig, r, r.Ts || T, `Run #${id + 1}: ${rigLabel(r)}`); }});
   requestAnimationFrame(animLoop);
 }
 
@@ -1128,7 +1163,7 @@ function schedPreview() {
     prevPend = false; const p = readSim(), bad = validSim(p);
     PREVIEW = bad ? null : simRun(p);
     if (ANIM.ex1) { ANIM.ex1.refresh(); if (PREVIEW) ANIM.ex1.play("preview"); }
-    updateTheory(bad ? null : p);
+    updateTheory(bad ? null : p, "Current sliders");
     
     $("sMetrics").innerHTML = bad ? bad : PREVIEW.unstable ? "<b>Unstable</b>: the response grows or keeps oscillating."
       : `Final value <b>${PREVIEW.m.fin.toFixed(4)}</b> · steady-state error <b>${PREVIEW.m.ess.toFixed(4)}</b><br>Overshoot <b>${isFinite(PREVIEW.m.os) ? PREVIEW.m.os.toFixed(1) + " %" : "–"}</b> · settling (2 %) <b>${PREVIEW.m.ts.toFixed(1)} s</b>`;
@@ -1140,6 +1175,7 @@ function addSim(p, quiet) {
   const bad = validSim(p); if (bad) { alert(bad); return; }
   p.uid = newUid();
   S.figs[SEL.ex1].runs.push(simRun(p)); PREVIEW = null;
+  updateTheory(p, `Run #${S.figs[SEL.ex1].runs.length}: ${simLabel(p)}`);
   if (ANIM.ex1) ANIM.ex1.play(S.figs[SEL.ex1].runs.length - 1);
   if (!quiet) { save(); onDataChanged(); refresh1(); }
 }
@@ -1191,6 +1227,10 @@ function buildRig(rig) {
         <label class="f" style="justify-content:flex-start"><input type="checkbox" id="${rig}LiveTune"> Apply slider changes during the run</label>
         <div class="row"><button class="b p" id="${rig}Go">${LAB ? "Run on the rig" : "Run (emulated rig)"}</button><button class="b stop" id="${rig}Stop" disabled>STOP</button></div>
         <div class="phase" id="${rig}Phase">${NOT_CONN}</div>
+        <h3>Closed loop (linearised model of the rig)</h3>
+        <div class="theory" id="${rig}Theory"></div>
+        <canvas id="${rig}Pz" class="pz"></canvas>
+        <p class="hint">Pole map of a linear model identified on the lab rig (× poles, ○ zeros; shaded half-plane = stable). The real rig also has fan saturation (0–255), ${isBeam ? "a fan dead zone and end stops" : "the weight of the ball (about 110 PWM to float) and the ends of the tube"} and sensor noise, which this model leaves out.</p>
         <p class="hint">${LAB ? "Switch on the 5 V bench supply before running. STOP switches the fan off at any time. The Nano also switches the fan off at the end of every run." : "The emulator simulates the rig and its Nano: no hardware is needed."}</p>
       </div>
     </div>
@@ -1219,8 +1259,8 @@ function buildRig(rig) {
   const h = RT[rig] = {render: null};
   $(rig + "SP").value = S.sp[rig];
   $(rig + "SP").onchange = () => { S.sp[rig] = +$(rig + "SP").value; save(); };
-  wireGains(rig, R.max, () => { liveTune(rig); if (RT[rig].render) RT[rig].render(); });
-  for (const k of ["SP", "Ts", "Dur"]) $(rig + k).addEventListener("input", () => RT[rig].render && RT[rig].render());
+  wireGains(rig, R.max, () => { liveTune(rig); updateRigTheory(rig); if (RT[rig].render) RT[rig].render(); });
+  for (const k of ["SP", "Ts", "Dur"]) $(rig + k).addEventListener("input", () => { updateRigTheory(rig); if (RT[rig].render) RT[rig].render(); });
   setGains(rig, R.max, FIGS[R.figs[0]].lab[0]);
   $(rig + "Show").onchange = () => { SHOW[rig] = $(rig + "Show").value; h.render(); };
   if ($(rig + "Noise")) $(rig + "Noise").onchange = () => { if (LINK.emu && LINK.emu.noise) LINK.emu.noise[rig] = $(rig + "Noise").checked; };
@@ -1243,7 +1283,7 @@ function refreshRig(rig) {
   sub.innerHTML = R.figs.map(id => `<button data-f="${id}" class="${id === SEL[rig] ? "on" : ""}">${FIGS[id].short}<span class="n">(${S.figs[id].runs.length})</span></button>`).join("");
   sub.querySelectorAll("button").forEach(b => b.onclick = () => { SEL[rig] = b.dataset.f; refreshRig(rig); });
   $(rig + "StepsIntro").textContent = FIGS[SEL[rig]].intro || "";
-  renderSteps($(rig + "Steps"), SEL[rig], LAB ? "Run on rig" : "Run", g => { if (LINK.running) return; setGains(rig, R.max, g); rigRun(rig); });
+  renderSteps($(rig + "Steps"), SEL[rig], LAB ? "Run on rig" : "Run", g => { if (LINK.running) return; setGains(rig, R.max, g); updateRigTheory(rig); rigRun(rig); });
   const runs = S.figs[SEL[rig]].runs, u = R.unit;
   let head = `<tr><th>#</th><th>Gains</th><th>Setpoint</th>`, row = r => "";
   
@@ -1380,6 +1420,7 @@ async function rigRun(rig) {
   if (![P, I, D, sp].every(isFinite)) { $(rig + "Phase").textContent = "Check the gains and the setpoint."; return; }
   if (rig === "beam" && (sp < 300 || sp > 700) && !confirm(`Setpoint ${sp} is outside the usual range (400-600). Run anyway?`)) return;
   stopMonitor();
+  updateRigTheory(rig, {P, I, D}, Ts, `Run #${S.figs[figId].runs.length + 1} (starting): ${gl({P, I, D})}${Math.abs(Ts - T) > 1e-9 ? ` · T = ${Ts} s` : ""}`);
   const run = {type: "rig", uid: newUid(), rig, P, I, D, sp, n, Ts, source: LINK.isEmu ? "emulator" : "rig", noise: LINK.isEmu && LINK.emu && LINK.emu.noise ? LINK.emu.noise[rig] !== false : true, date: new Date().toISOString(), t: [], pv: [], out: [], err: []};
   LINK.running = run; LINK.abort = false; updateButtons();
   S.figs[figId].runs.push(run); delete VIEW[figId]; refreshRig(rig);
@@ -1653,6 +1694,7 @@ window.addEventListener("beforeunload", () => { if (LINK.tr) try { LINK.tr.write
 
 load();
 buildEx1(); buildRig("beam"); buildRig("ball"); setupAnimations(); updateButtons(); schedPreview();
+updateRigTheory("beam"); updateRigTheory("ball");
 if (typeof buildSelfTest === "function") buildSelfTest();
 if (location.hash.startsWith("#tab=")) showTab(location.hash.slice(5));
 document.body.dataset.ready = "1";
