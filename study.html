@@ -196,7 +196,7 @@ canvas.anim.tall { height: 240px; }
         <h3>Controller</h3>
         <div id="sGains"></div>
         <label class="f">Stop time <span><input type="number" id="sT" value="40" step="1"> <span class="u">s</span></span></label>
-        <label class="f">Controller <select id="sTs" title="Continuous PID (as the Simulink PID block) or a digital PID updated every T seconds (as on the Arduino)">
+        <label class="f">Controller <select id="sTs" title="Continuous PID or a digital PID updated every T seconds (as on the Arduino)">
           <option value="0" selected>continuous (step 0.01 s, standard)</option>
           <option value="0.01">digital, T = 0.01 s</option><option value="0.05">digital, T = 0.05 s</option>
           <option value="0.1">digital, T = 0.1 s</option><option value="0.2">digital, T = 0.2 s</option><option value="0.5">digital, T = 0.5 s</option>
@@ -271,7 +271,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 14:46";
+const BUILD = "2026-11-11 14:49";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -1162,7 +1162,7 @@ function setSystem(sys, pp) {
   SYS = sys; const pl = PLANTS[sys]; PP = {};
   for (const [k, v] of pl.pars) PP[k] = pp && pp[k] !== undefined ? pp[k] : v;
   if ($("sSys")) $("sSys").value = sys;
-  $("sDesc").textContent = `Plant G(s): ${pl.name}. Unity feedback, step 0 → 1 at t = 0, fixed step 0.01 s. PID: P + I/s + D·N s/(s + N), N = 100 (Simulink default).`;
+  $("sDesc").textContent = `Plant G(s): ${pl.name}. Unity feedback, step 0 → 1 at t = 0, fixed step 0.01 s. PID: P + I/s + D·N s/(s + N), N = 100.`;
   $("sPars").innerHTML = pl.pars.length ? "<h3>System</h3>" + pl.pars.map(([k, , d]) => `<label class="f">${psym(k)} <span class="hint" style="margin:0 auto 0 6px">${d}</span><input type="number" data-k="${k}" value="${PP[k]}" step="any"></label>`).join("") : "";
   $("sPars").querySelectorAll("input").forEach(i => i.oninput = () => { PP[i.dataset.k] = +i.value; schedPreview(); });
   schedPreview();
@@ -1677,7 +1677,7 @@ const STQ = [
    ex: "At the bottom the error is e = 30 − 15 = 15 cm, so the fan drive is u = 15P. The ball only lifts when u exceeds the 120 PWM needed to balance its weight: P > 120/15 = 8. Even then a P-only controller cannot hold the ball at the setpoint: to keep 120 PWM it needs a permanent error e = 120/P (12 cm with P = 10). The weight acts like a constant disturbance. With integral action, the integral term supplies the 120 PWM while the error goes to zero, so even a small P works (slowly)."},
   {id: "a12", q: "On the emulated ball-in-a-tube, a run with P = 1, I = 0.5 and D = 1 keeps jittering around the setpoint, while the dotted model prediction settles exactly. With “sensor noise” switched off, the run matches the prediction. Why does the derivative term make the noise matter so much?",
    opts: ["D adds a steady-state error", "D reacts to the change of the error from one sample to the next; the sensor noise (about ±0.6 cm every 0.1 s) looks like a fast change, so D turns it into a jittery fan drive that moves the ball", "D slows the integral down", "The noise only affects the plot, never the ball"], ans: 1,
-   ex: "The derivative term is D·(e(k) − e(k−1))/T. Measurement noise of ±0.6 cm between two samples taken 0.1 s apart looks like a speed of ±6 cm/s, so with D = 1 the fan drive jumps by several PWM at every sample. Part of what you see in the error plot is the noise itself (the plot shows the measurement), and part is real motion of the ball caused by the jittery fan. This is why derivative action is used with care on noisy sensors, often with a low-pass filter on the derivative (like the N = 100 filter of the Simulink PID block)."},
+   ex: "The derivative term is D·(e(k) − e(k−1))/T. Measurement noise of ±0.6 cm between two samples taken 0.1 s apart looks like a speed of ±6 cm/s, so with D = 1 the fan drive jumps by several PWM at every sample. Part of what you see in the error plot is the noise itself (the plot shows the measurement), and part is real motion of the ball caused by the jittery fan. This is why derivative action is used with care on noisy sensors, often with a low-pass filter on the derivative (like the N = 100 filter used in Ex.1)."},
 ];
 function buildSelfTest() {
   $("stBody").innerHTML = STQ.map((q, i) => `
