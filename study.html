@@ -145,6 +145,7 @@ canvas.anim.tall { height: 240px; }
     <select id="emuSpeed" title="Emulator speed"><option value="1">1× (real time)</option><option value="5">5×</option><option value="20">20×</option></select>
     
     <button class="b" id="btnDisconnect" disabled>Disconnect</button>
+    
   </div>
 </header>
 <nav id="nav">
@@ -270,7 +271,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 14:35";
+const BUILD = "2026-11-11 14:43";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -335,6 +336,7 @@ const SHOW = {ex1: "y", beam: "err", ball: "err"};
 let PREVIEW = null;       // live Ex.1 curve that follows the sliders
 
 function save() {
+  S.savedAt = Date.now();
   try {
     const out = JSON.parse(JSON.stringify(S, (k, v) => (k === "t" || k === "y" || k === "u") && Array.isArray(v) && v.length > 2000 ? undefined : v));
     for (const id in out.figs) out.figs[id].runs = out.figs[id].runs.map(r => r.type === "sim" ? {type: "sim", p: r.p} : r);
