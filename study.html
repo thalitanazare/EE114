@@ -54,6 +54,15 @@ header button.b { padding: 4px 10px; font-size: 13px; }
 .subtabs button { font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--line); background: #f7f8fa; border-radius: 5px; cursor: pointer; color: var(--ink); }
 .subtabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .subtabs button .n { opacity: .7; margin-left: 4px; }
+/* figure tabs: light red until every step of the figure is done, then green */
+.subtabs button.todo:not(.on) { background: #fdeeee; border-color: #f0b4b4; }
+.subtabs button.done:not(.on) { background: #e6f4ea; border-color: #96cfa6; }
+.subtabs button.on.todo { box-shadow: inset 0 -4px 0 #f19c9c; }
+.subtabs button.on.done { box-shadow: inset 0 -4px 0 #6cc488; }
+.subtabs button .ok { margin-left: 4px; color: #1b7f3b; font-weight: 700; }
+.subtabs button.on .ok { color: #fff; }
+.goto { font-size: 13px; padding: 3px 10px; margin: 2px 0 6px; }
+#backRep { position: fixed; right: 18px; bottom: 18px; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
 .plotwrap { position: relative; width: 100%; height: 430px; }
 .plotwrap canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
 .readout { font: 12px/1.4 Consolas, "Courier New", monospace; color: var(--muted); min-height: 18px; margin-top: 4px; white-space: pre-wrap; }
@@ -261,7 +270,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 13:33";
+const BUILD = "2026-11-11 14:35";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -861,6 +870,17 @@ function stepState(id, g) {
   return st;
 }
 const stepDone = (id, g) => stepState(id, g) === "done";
+/* a figure is complete when every step is done (a design figure: when it has a run); null = no status shown */
+function figDone(id) {
+  const F = FIGS[id]; if (!F.lab) return null;
+  if (F.lab.length) return F.lab.every(g => stepDone(id, g));
+  return LAB ? S.figs[id].runs.length > 0 : null;
+}
+function figTab(id, sel) {
+  const d = figDone(id), st = d == null ? "" : d ? "done" : "todo";
+  const tip = d == null ? "" : d ? "Complete: every step of this figure has been run" : "Not complete yet: run every step of this figure";
+  return `<button data-f="${id}" class="${id === sel ? "on" : ""} ${st}" title="${tip}">${FIGS[id].short}<span class="n">(${S.figs[id].runs.length})</span>${d ? '<span class="ok">✓</span>' : ""}</button>`;
+}
 function renderSteps(ol, id, verb, act) {
   const steps = FIGS[id].lab || [];
   const states = steps.map(g => stepState(id, g)), next = states.findIndex(x => !x);
@@ -1177,7 +1197,7 @@ function addSim(p, quiet) {
   if (!quiet) { save(); onDataChanged(); refresh1(); }
 }
 function refresh1() {
-  $("sub1").innerHTML = ex1Figs.map(id => `<button data-f="${id}" class="${id === SEL.ex1 ? "on" : ""}">${FIGS[id].short}<span class="n">(${S.figs[id].runs.length})</span></button>`).join("");
+  $("sub1").innerHTML = ex1Figs.map(id => figTab(id, SEL.ex1)).join("");
   $("sub1").querySelectorAll("button").forEach(b => b.onclick = () => { SEL.ex1 = b.dataset.f; refresh1(); });
   
   const runs = S.figs[SEL.ex1].runs;
@@ -1284,7 +1304,7 @@ function rigMetrics(r) {
 function refreshRig(rig) {
   const R = RIGS[rig];
   const sub = $(rig + "Sub");
-  sub.innerHTML = R.figs.map(id => `<button data-f="${id}" class="${id === SEL[rig] ? "on" : ""}">${FIGS[id].short}<span class="n">(${S.figs[id].runs.length})</span></button>`).join("");
+  sub.innerHTML = R.figs.map(id => figTab(id, SEL[rig])).join("");
   sub.querySelectorAll("button").forEach(b => b.onclick = () => { SEL[rig] = b.dataset.f; refreshRig(rig); });
   $(rig + "StepsIntro").textContent = FIGS[SEL[rig]].intro || "";
   renderSteps($(rig + "Steps"), SEL[rig], LAB ? "Run on rig" : "Run", g => { if (LINK.running) return; setGains(rig, R.max, g); updateRigTheory(rig); rigRun(rig); });
@@ -1706,7 +1726,7 @@ function showTab(t) {
   if (MON.rig && RIGS[MON.rig].tab !== t) stopMonitor();
   updateConnCards();
 }
-document.querySelectorAll("#nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+document.querySelectorAll("#nav button").forEach(b => b.onclick = () => { showTab(b.dataset.tab); if ($("backRep") && b.dataset.tab === "report") $("backRep").hidden = true; });
 
 $("btnDisconnect").onclick = disconnect;
 if ("serial" in navigator) navigator.serial.addEventListener("disconnect", e => { if (e.target === LINK.port) linkLost(); });
