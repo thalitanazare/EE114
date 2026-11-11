@@ -169,7 +169,7 @@ body.locked #lockScreen { display: flex; justify-content: center; padding: 40px 
       <li>Set the gains with the sliders or type the values. Every run is added to the current figure, like <code>hold on</code> in MATLAB. Each figure in the sub-tabs matches one plot of the answer sheet.</li>
       <li>Write your comments in the <b>Report</b> tab and press <b>Print / Save as PDF</b>. The figures are inserted automatically.</li>
     </ol>
-    <p class="hint">Your runs and answers are kept in this browser until you press "Clear everything" in the Report tab.</p>
+    <p class="hint">Your runs and answers are kept on this PC, so closing the page by mistake loses nothing. When you have saved your report, press "End session" (top right). Work left for more than 4 hours is deleted automatically.</p>
   </div>
   
   
@@ -256,9 +256,8 @@ body.locked #lockScreen { display: flex; justify-content: center; padding: 40px 
     <div class="row">
       <button class="b p" id="rPrint">Print / Save as PDF</button>
       <button class="b" id="rCsv">Save all data (CSV)</button>
-      <button class="b" id="rReset">Clear everything</button>
     </div>
-    <p class="hint">In the print dialogue, choose "Save as PDF" to get a file to submit, or print it directly.</p>
+    <p class="hint">In the print dialogue, choose "Save as PDF" to get a file to submit, or print it directly. Then press "End session" (top right) to delete your work from this PC.</p>
   </div>
   <div id="rBody"></div>
 </section>
@@ -272,10 +271,6 @@ body.locked #lockScreen { display: flex; justify-content: center; padding: 40px 
     <p>The lab edition is used during the lab session. Your demonstrator will give you the password.</p>
     <div class="row"><input type="password" id="lockPw" size="22" placeholder="Password" autocomplete="off"><button class="b p" id="lockGo">Open the lab</button></div>
     <p class="hint" id="lockMsg"></p>
-    <div id="lockResume" hidden>
-      <p><b>Work from an earlier session is stored on this PC</b> <span id="lockResumeInfo"></span>.</p>
-      <div class="row"><button class="b p" id="lockContinue">Continue that session</button><button class="b" id="lockNew">Start a new session (delete it)</button></div>
-    </div>
     <p class="hint">Preparing at home? Use the <a href="study.html">study edition</a>.</p>
   </div>
 </div>
@@ -302,7 +297,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 14:43";
+const BUILD = "2026-11-11 14:46";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -316,25 +311,18 @@ const pwHash = w => { let h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (const c of w) {
 const LAB_PW = "f5de8f8b20a2990";
 let unlocked = false; try { unlocked = sessionStorage.getItem("ee114-lab4-open") === LAB_PW; } catch (e) {}
 if (ED === "lab" && !unlocked) document.body.classList.add("locked");
-/* Reloading the page keeps the work (it stays in this browser). After the browser has been closed, the password is
-   asked again, and if earlier work is stored, the students choose to continue it or to start a new session. */
+/* The work is kept in this browser, so closing the page by mistake loses nothing. Work not touched for
+   KEEP_HOURS (a lab session) is discarded when the page opens, so the next group starts empty.
+   "End session" deletes it at once. */
+const KEEP_HOURS = 4;
 function openLab() { document.body.classList.remove("locked"); try { sessionStorage.setItem("ee114-lab4-open", LAB_PW); } catch (e) {} }
-function storedWork() {
-  let runs = 0; for (const id in FIGS) runs += S.figs[id].runs.length;
-  const ans = Object.values(S.report.answers || {}).filter(v => String(v).trim()).length;
-  return runs || ans || (S.report.names || "").trim() ? {runs, ans} : null;
-}
 function endSession() {
   try { localStorage.removeItem(STORE); sessionStorage.removeItem("ee114-lab4-open"); } catch (e) {}
   location.reload();
 }
 function tryUnlock() {
   if (pwHash($("lockPw").value.trim()) !== LAB_PW) { $("lockMsg").textContent = "Wrong password. Ask your demonstrator."; $("lockPw").select(); return; }
-  const w = storedWork();
-  if (!w) { openLab(); return; }
-  $("lockMsg").textContent = "";
-  $("lockResumeInfo").textContent = `(${(S.report.names || "").trim() ? "names: " + S.report.names.trim() + ", " : ""}${w.runs} run${w.runs === 1 ? "" : "s"}, ${w.ans} answer${w.ans === 1 ? "" : "s"}${S.savedAt ? ", last saved " + new Date(S.savedAt).toLocaleString() : ""})`;
-  $("lockResume").hidden = false;
+  openLab();
 }
 
 
@@ -414,6 +402,9 @@ function load() {
   try {
     const raw = localStorage.getItem(STORE); if (!raw) return;
     const st = JSON.parse(raw);
+    
+    if (!st.savedAt || Date.now() - st.savedAt > KEEP_HOURS * 3600e3) { localStorage.removeItem(STORE); return; }   // an earlier session
+    
     for (const id in FIGS) if (st.figs && st.figs[id]) st.figs[id].runs = st.figs[id].runs.filter(r => r.type !== "sim" || PLANTS[r.p.sys]).map(r => r.type === "sim" ? simRun(r.p) : r);
     for (const id in st.figs || {}) if (!FIGS[id]) delete st.figs[id];
     S = Object.assign(S, st);
@@ -1856,7 +1847,6 @@ $("rNames").oninput = () => { S.report.names = $("rNames").value; save(); };
 $("rDate").oninput = () => { S.report.date = $("rDate").value; save(); };
 $("rPrint").onclick = printReport;
 $("rCsv").onclick = allCsv;
-$("rReset").onclick = () => { if (confirm("Delete all runs and answers stored in this browser?")) { try { localStorage.removeItem(STORE); } catch (e) {} location.reload(); } };
 onDataChanged = () => { if ($("tab-report").classList.contains("on")) buildReport(); };
 
 
@@ -1873,8 +1863,6 @@ function showTab(t) {
 }
 document.querySelectorAll("#nav button").forEach(b => b.onclick = () => { showTab(b.dataset.tab); if ($("backRep") && b.dataset.tab === "report") $("backRep").hidden = true; });
 $("btnConnect").onclick = connectSerial; $("lockGo").onclick = tryUnlock; $("lockPw").onkeydown = e => { if (e.key === "Enter") tryUnlock(); };
-$("lockContinue").onclick = openLab;
-$("lockNew").onclick = () => { if (confirm("Delete the stored runs and answers and start a new session?")) endSession(); };
 $("btnEnd").onclick = async () => {
   if (LINK.running) { alert("Stop the run first."); return; }
   if (!confirm("End the session?\n\nAll runs, figures and answers stored on this PC are deleted, and the page goes back to the password screen.\nSave your report as PDF first (Report tab).")) return;
