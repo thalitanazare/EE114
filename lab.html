@@ -258,14 +258,9 @@ body.locked #lockScreen { display: flex; justify-content: center; padding: 40px 
 
 <div id="lockScreen">
   <div class="card">
-    <h2>Connect your rig to start</h2>
-    <p>The lab edition only works in the lab, with the Arduino of a rig (balance beam or ball in a tube) connected to this PC by USB.</p>
-    <ol class="steps">
-      <li>Connect the Nano of your rig with the USB cable.</li>
-      <li>Press <b>Connect to Arduino</b> and choose its port (often <i>USB-SERIAL CH340</i>).</li>
-      <li>If the page asks for it, press <b>Install Lab 4 firmware</b> (about 15 s).</li>
-    </ol>
-    <div class="row"><button class="b p" id="lockConnect">Connect to Arduino</button></div>
+    <h2>Lab edition · enter the lab password</h2>
+    <p>The lab edition is used during the lab session. Your demonstrator will give you the password.</p>
+    <div class="row"><input type="password" id="lockPw" size="22" placeholder="Password" autocomplete="off"><button class="b p" id="lockGo">Open the lab</button></div>
     <p class="hint" id="lockMsg"></p>
     <p class="hint">Preparing at home? Use the <a href="study.html">study edition</a>.</p>
   </div>
@@ -292,14 +287,24 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 12:00";
+const BUILD = "2026-11-11 13:33";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
 let onDataChanged = () => {};                  // the report hooks in here (lab edition)
 const NOT_CONN = LAB ? "Connect to the Arduino first." : "Press “Use emulator” first.";
 
-if (ED === "lab") document.body.classList.add("locked");        // unlocked once a real board answers
+/* lab password: only a hash is stored in the page (this keeps the lab closed before the session; it is not a security measure) */
+const pwHash = w => { let h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (const c of w) { const k = c.charCodeAt(0); h1 = Math.imul(h1 ^ k, 2654435761); h2 = Math.imul(h2 ^ k, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16); };
+const LAB_PW = "f5de8f8b20a2990";
+let unlocked = false; try { unlocked = sessionStorage.getItem("ee114-lab4-open") === LAB_PW; } catch (e) {}
+if (ED === "lab" && !unlocked) document.body.classList.add("locked");
+function tryUnlock() {
+  if (pwHash($("lockPw").value.trim()) === LAB_PW) { document.body.classList.remove("locked"); try { sessionStorage.setItem("ee114-lab4-open", LAB_PW); } catch (e) {} }
+  else { $("lockMsg").textContent = "Wrong password. Ask your demonstrator."; $("lockPw").select(); }
+}
 
 
 /* =====================================================================
@@ -1418,7 +1423,6 @@ async function handshake(emu) {
     $("fwinfo").textContent = id ? `Firmware: ${id}${emu ? " (emulated)" : ""}` : "Firmware did not answer ID?: it may not be the Lab 4 firmware. Ask a demonstrator.";
     LINK.connected = true;
     LINK.lab4fw = !!id; LINK.fwId = id;
-    if (!emu) document.body.classList.remove("locked");
     const fwOK = typeof FW !== "undefined" && FW.ok;
     const ver = id.split(",")[1] || "", old = !!id && fwOK && verLess(ver, FW.version);
     if (emu) setStatus(`Emulator connected (${LINK.emu.speed}×)`, "warn");
@@ -1429,7 +1433,6 @@ async function handshake(emu) {
     if ($("btnFlash")) $("btnFlash").hidden = !LINK.needFw;
   } catch (e) {
     setStatus("No answer from the board. Check the COM port and that the Lab 4 firmware is installed.", "bad");
-    if ($("lockMsg")) $("lockMsg").textContent = "No answer from the board on that port. Check the cable and choose the Nano's port.";
     await disconnect();
   }
   updateButtons();
@@ -1801,7 +1804,7 @@ function showTab(t) {
   updateConnCards();
 }
 document.querySelectorAll("#nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
-$("btnConnect").onclick = connectSerial; $("lockConnect").onclick = connectSerial;
+$("btnConnect").onclick = connectSerial; $("lockGo").onclick = tryUnlock; $("lockPw").onkeydown = e => { if (e.key === "Enter") tryUnlock(); };
 $("btnDisconnect").onclick = disconnect;
 if ("serial" in navigator) navigator.serial.addEventListener("disconnect", e => { if (e.target === LINK.port) linkLost(); });
 window.addEventListener("beforeunload", () => { if (LINK.tr) try { LINK.tr.write("STOP\n"); } catch (e) {} });
