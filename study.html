@@ -151,7 +151,7 @@ canvas.anim.tall { height: 240px; }
     <h2>Study edition · practise PID control at home</h2>
     <p>Use this edition to prepare for Lab 4. It does not produce the lab report. The lab itself uses the <b>lab edition</b> on the lab PCs, with the real rigs.</p>
     <ol class="steps">
-      <li><b>Ex.1 Simulation</b>: choose a system (mass-spring-damper, first or second order, with delay, an integrator, third order) and move the P, I and D sliders. The dotted curve follows the sliders live. Press "Add to figure" to keep a curve and compare.</li>
+      <li><b>Ex.1 Simulation</b>: choose a system (mass-spring-damper, first order, second order, or an integrator with a lag) and move the P, I and D sliders. The dotted curve follows the sliders live. Press "Add to figure" to keep a curve and compare.</li>
       <li><b>Ex.2</b> and <b>Ex.3</b>: press <b>Use emulator</b> to rehearse the rig procedure with simulated rigs. Tick "Apply slider changes during the run" to retune the controller while it runs.</li>
       <li><b>Self-test</b>: questions on other systems, with feedback. Try each one in the simulator before answering.</li>
     </ol>
@@ -255,7 +255,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 11:51";
+const BUILD = "2026-11-11 11:55";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -277,12 +277,8 @@ const PLANTS = {
           d: (x, u, q) => [(q.K * u - x[0]) / q.tau], y: x => x[0]},
   so:    {name: "Second order  K·ωn²/(s² + 2ζωn s + ωn²)", pars: [["K", 1, "gain"], ["wn", 1, "natural frequency (rad/s)"], ["zeta", 0.3, "damping ratio"]], n: 2,
           d: (x, u, q) => [x[1], q.wn * q.wn * (q.K * u - x[0]) - 2 * q.zeta * q.wn * x[1]], y: x => x[0]},
-  fopdt: {name: "First order with delay  K·e^(−Ls)/(τs + 1)", pars: [["K", 1, "gain"], ["tau", 1, "time constant (s)"], ["L", 0.5, "delay (s)"]], n: 1, delay: true,
-          d: (x, u, q) => [(q.K * u - x[0]) / q.tau], y: x => x[0]},
   integ: {name: "Integrator with lag  K/(s(τs + 1))", pars: [["K", 1, "gain"], ["tau", 1, "time constant (s)"]], n: 2,
           d: (x, u, q) => [x[1], (q.K * u - x[1]) / q.tau], y: x => x[0]},
-  third: {name: "Third order  1/(s + 1)³", pars: [], n: 3,
-          d: (x, u) => [-x[0] + u, -x[1] + x[0], -x[2] + x[1]], y: x => x[2]},
   
 };
 const PSYM = {tau: "τ", wn: "ωn", zeta: "ζ"};
@@ -439,22 +435,17 @@ function plantTF(sys, q) {
     case "fo":    return {num: [q.K], den: [q.tau, 1], txt: `${fmtC(q.K)} / (${polyStr([q.tau, 1])})`};
     case "so":    return {num: [q.K * q.wn * q.wn], den: [1, 2 * q.zeta * q.wn, q.wn * q.wn], txt: `${fmtC(q.K * q.wn * q.wn)} / (${polyStr([1, 2 * q.zeta * q.wn, q.wn * q.wn])})`};
     case "integ": return {num: [q.K], den: [q.tau, 1, 0], txt: `${fmtC(q.K)} / (${polyStr([q.tau, 1, 0])})`};
-    case "third": return {num: [1], den: [1, 3, 3, 1], txt: "1 / (s+1)³"};
-    case "fopdt": { const pd = padeP(q.L);
-      return {num: mulP([q.K], pd.n), den: mulP([q.tau, 1], pd.d), pade: q.L, txt: `${fmtC(q.K)} / (${polyStr([q.tau, 1])}), with a time delay of ${fmtC(q.L)} s`}; }
     default:      return null;
   }
 }
-/* second-order Pade approximation (internal; students only see "time delay included approximately") of a delay: e^(-th s) ≈ (1 - th s/2 + th² s²/12)/(1 + th s/2 + th² s²/12) */
-const padeP = th => ({n: [th * th / 12, -th / 2, 1], d: [th * th / 12, th / 2, 1]});
-/* linearised models of the lab rigs (identified on the rigs; the emulator uses the same values).
-   The delay includes the transport/fan delay, half a sample (zero-order hold) and, for the ball,
-   about one sample for the median-of-3 sensor filter. */
+/* simple models of the lab rigs (identified on the rigs; the emulator uses the same values).
+   The short delay of the fan and air (plus sampling) is modelled as an extra first-order lag. */
 function rigTF(rig, Ts) {
-  if (rig === "ball") { const th = 0.04 + 1.5 * Ts, pd = padeP(th);
-    return {num: mulP([7.73], pd.n), den: mulP([2.709, 1, 0], pd.d), pade: th, txt: `7.73 / (s(2.709s + 1)), with a time delay of ${fmtC(th)} s   [fan PWM → ball height, cm]`}; }
-  const th = 0.34 + Ts / 2, pd = padeP(th);
-  return {num: mulP([2.2226], pd.n), den: mulP([0.776, 1], pd.d), pade: th, txt: `2.22 / (0.776s + 1), with a time delay of ${fmtC(th)} s   [fan PWM → beam reading, counts]`};
+  // the delay of the fan and air (plus sampling) is modelled as an extra first-order lag with time constant th
+  if (rig === "ball") { const th = +(0.04 + 1.5 * Ts).toFixed(3);
+    return {num: [7.73], den: mulP([2.709, 1, 0], [th, 1]), txt: `7.73 / (s(2.709s + 1)(${fmtC(th)}s + 1))   [fan PWM → ball height, cm]`}; }
+  const th = +(0.34 + Ts / 2).toFixed(3);
+  return {num: [2.2226], den: mulP([0.776, 1], [th, 1]), txt: `2.22 / ((0.776s + 1)(${fmtC(th)}s + 1))   [fan PWM → beam reading, counts]`};
 }
 const trimP = a => { let i = 0; while (i < a.length - 1 && Math.abs(a[i]) < 1e-12) i++; return a.slice(i); };
 function addP(a, b) { const n = Math.max(a.length, b.length), r = new Array(n).fill(0); a.forEach((v, i) => r[n - a.length + i] += v); b.forEach((v, i) => r[n - b.length + i] += v); return trimP(r); }
@@ -534,13 +525,12 @@ function renderTheory(el, cvs, cl, title, notes) {
   const maxRe = Math.max(...cl.poles.map(z => z[0]));
   const stab = maxRe < -1e-6 ? `<span class="st">stable</span>` : maxRe > 1e-6 ? `<span class="un">unstable</span>` : `<b>marginally stable</b>`;
   el.innerHTML = (title ? `<i>${title}</i>\n` : "") + `G(s) = ${cl.G.txt}\nC(s) = ${C}\n<b>Y(s)/R(s) = (${polyStr(cl.num)}) / (${polyStr(cl.den)})</b>\nPoles: ${poleList(cl.poles)}  → ${stab}` +
-    (cl.G.pade ? `\n<i>The time delay (${fmtC(cl.G.pade)} s) is included approximately. This adds extra poles and zeros far from the origin (shown on the edge of the map); you can ignore them.</i>` : "") +
     (notes ? `\n<i>${notes}</i>` : "");
   drawPZ(cvs, cl);
 }
 function updateTheory(p, title) {
   renderTheory($("sTheory"), $("pz"), p ? closedLoop(p) : null, title,
-    p && p.Ts > 0 ? `Digital PID, T = ${p.Ts} s: these are the poles of the continuous loop. Sampling adds a delay of about T/2, which reduces damping and can destabilise the loop.` : "");
+    p && p.Ts > 0 ? `Digital PID updated every T = ${p.Ts} s, as on the Arduino. The poles shown are those of the continuous PID.` : "");
 }
 /* rigs: linearised model, for the given gains and sample time */
 function updateRigTheory(rig, g, Ts, title) {
@@ -1609,9 +1599,6 @@ const STQ = [
    try: {sys: "fo", pp: {K: 1, tau: 2}, P: 1, I: 0.5, D: 0},
    opts: ["0.5", "Slightly below 1, depending on τ", "Exactly 1", "It grows without limit"], ans: 2,
    ex: "With integral action, the integrator keeps changing the controller output as long as the error is non-zero. The loop can only settle when e = 0, so the output reaches exactly 1 (for a stable loop), whatever the plant gain and time constant."},
-  {id: "a5", q: "Third-order plant G(s) = 1/(s + 1)³ with a P-only controller. Above which value of P does the closed loop become unstable (sustained or growing oscillation)? Find it with the slider first.",
-   try: {sys: "third", pp: {}, P: 6, I: 0, D: 0}, num: 8, tol: 0.5,
-   ex: "The characteristic equation is (s + 1)³ + P = s³ + 3s² + 3s + 1 + P = 0. The Routh criterion requires 3·3 > 1 + P, i.e. P < 8. At P = 8 the loop oscillates at ω = √3 rad/s, and above 8 the oscillation grows. High proportional gain can destabilise a loop when the plant has enough lag."},
   {id: "a6", q: "Second-order plant (K = 1, ωn = 1, ζ = 0.2) with P = 2 and I = 0. What does adding D = 1 do?",
    try: {sys: "so", pp: {K: 1, wn: 1, zeta: 0.2}, P: 2, I: 0, D: 1},
    opts: ["It removes the steady-state error", "It reduces the overshoot and oscillation; the steady-state value is unchanged", "It increases the overshoot", "It makes the loop unstable"], ans: 1,
@@ -1620,10 +1607,6 @@ const STQ = [
    try: {sys: "integ", pp: {K: 1, tau: 1}, P: 2, I: 0, D: 0},
    opts: ["Zero", "1/(1 + P)", "It grows linearly", "Equal to 1"], ans: 0,
    ex: "The plant already contains an integrator (type-1 system), so the loop settles only when e = 0, even without I in the controller. If a constant disturbance acted at the plant input, however, a P-only controller would leave a steady error, because something must then hold a non-zero controller output at e = 0. Only integral action in the controller provides that."},
-  {id: "a8", q: "First order with delay, G(s) = e^(−0.5s)/(s + 1), P-only. What happens when P is raised from 1 to 5?",
-   try: {sys: "fopdt", pp: {K: 1, tau: 1, L: 0.5}, P: 5, I: 0, D: 0},
-   opts: ["The steady-state error disappears", "The response becomes faster and still settles", "The loop oscillates with growing amplitude (unstable)", "Nothing changes because of the delay"], ans: 2,
-   ex: "The delay adds phase lag without reducing the gain. For this plant, the loop becomes unstable for P above about 3.8, where the total phase lag reaches 180° at the frequency where the loop gain is 1. Delay (like the response time of a fan and a sensor) limits how much gain a real loop can tolerate."},
   {id: "a9", q: "On the ball-in-a-tube rig, the interface shows error e = distance − setpoint = +5 cm. Where is the ball, and what should the controller do?",
    opts: ["5 cm above the setpoint; reduce the fan", "5 cm below the setpoint; increase the fan", "At the setpoint; nothing", "It depends on the sign of P"], ans: 1,
    ex: "The distance is measured from the top of the tube, so a larger distance means a lower ball. A positive error means the ball is too low, and with positive gains the controller increases the fan drive."},
@@ -1633,9 +1616,6 @@ const STQ = [
   {id: "a12", q: "On the emulated ball-in-a-tube, a run with P = 1, I = 0.5 and D = 1 keeps jittering around the setpoint, while the dotted model prediction settles exactly. With “sensor noise” switched off, the run matches the prediction. Why does the derivative term make the noise matter so much?",
    opts: ["D adds a steady-state error", "D reacts to the change of the error from one sample to the next; the sensor noise (about ±0.6 cm every 0.1 s) looks like a fast change, so D turns it into a jittery fan drive that moves the ball", "D slows the integral down", "The noise only affects the plot, never the ball"], ans: 1,
    ex: "The derivative term is D·(e(k) − e(k−1))/T. Measurement noise of ±0.6 cm between two samples taken 0.1 s apart looks like a speed of ±6 cm/s, so with D = 1 the fan drive jumps by several PWM at every sample. Part of what you see in the error plot is the noise itself (the plot shows the measurement), and part is real motion of the ball caused by the jittery fan. This is why derivative action is used with care on noisy sensors, often with a low-pass filter on the derivative (like the N = 100 filter of the Simulink PID block)."},
-  {id: "a10", q: "The fan PWM saturates at 255. Why does the firmware stop the integral from growing while the output is saturated (anti-windup)?",
-   opts: ["To make the loop faster at the start", "Because the integral of a saturated signal is zero", "Otherwise the integral keeps growing while the fan cannot do more, which causes a large overshoot and a slow recovery once the error changes sign", "To remove the steady-state error"], ans: 2,
-   ex: "During saturation, extra integral does not change the fan drive. Without anti-windup, the stored integral must be 'unwound' by an error of the opposite sign before the fan output can come down, which gives a long overshoot. Freezing the integral during saturation avoids this."},
 ];
 function buildSelfTest() {
   $("stBody").innerHTML = STQ.map((q, i) => `
