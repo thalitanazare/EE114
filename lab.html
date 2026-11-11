@@ -80,6 +80,8 @@ details.log summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 pre.log { max-height: 180px; overflow: auto; background: #0f1720; color: #cde; font-size: 12px; padding: 8px; border-radius: 6px; margin: 6px 0 0; }
 .steps { margin: 4px 0 0 18px; padding: 0; } .steps li { margin: 3px 0; }
 .q { margin: 10px 0 14px; } .q p { margin: 0 0 4px; font-weight: 600; font-size: 14px; }
+.q .qn { display: inline-block; min-width: 2.2em; color: var(--accent); font-weight: 700; }
+#rBody h4 { margin: 14px 0 4px; font-size: 14px; color: #555; font-style: italic; }
 .figthumb { width: 100%; max-width: 860px; border: 1px solid var(--line); border-radius: 4px; }
 .flag { font-size: 12px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; }
 .flag.ok { background: #e3f4ea; color: var(--good); } .flag.no { background: #fde8e6; color: var(--bad); } .flag.emu { background: #fff1d6; color: var(--warn); }
@@ -257,6 +259,7 @@ body.locked #lockScreen { display: flex; justify-content: center; padding: 40px 
       <button class="b p" id="rPrint">Print / Save as PDF</button>
       <button class="b" id="rCsv">Save all data (CSV)</button>
     </div>
+    <p id="rProg"></p>
     <p class="hint">In the print dialogue, choose "Save as PDF" to get a file to submit, or print it directly. Then press "End session" (top right) to delete your work from this PC.</p>
   </div>
   <div id="rBody"></div>
@@ -297,7 +300,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 14:55";
+const BUILD = "2026-11-11 15:02";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
@@ -1733,7 +1736,7 @@ async function rigStop() {
    Report (lab edition only)
    ===================================================================== */
 const REPORT = [
-  {h: "Pre-lab: theory (M = B = K = 1)", parts: [
+  {h: "Pre-lab: theory (M = B = K = 1)", pre: true, parts: [
     {h: "Closed loop with P-only control", qs: [
       ["p1", "Derive the closed-loop transfer function Y(s)/R(s) of the mass-spring-damper with a P-only controller (unity feedback)."],
       ["p2", "Use the final value theorem to find the steady-state output for a unit step as a function of P. Evaluate it for P = 1, 2, 5, 100 and 500."],
@@ -1744,34 +1747,36 @@ const REPORT = [
       ["p6", "With an ideal PID controller, how does D enter the characteristic polynomial? What effect do you expect on damping and on the steady-state value?"]]},
     {h: "Ball in a tube: the weight of the ball", qs: [
       ["p7", "On the ball-in-a-tube rig the fan needs about 110 PWM (of 255) to keep the ball floating. The ball starts at the bottom, 31 cm from the top, and the setpoint is 10 cm (e = distance − setpoint, u = P·e with P-only control). What is the smallest P that can lift the ball from the bottom? With P = 7, estimate the steady-state error if the ball settles. Why does integral action remove this error?"]]}]},
+  /* numbered questions: num = question number; a part with cont: true continues the letters of the previous number
+     (same question, another view of the figure) */
   {h: "Ex.1: PID control of the mass-spring-damper (bicycle) system", parts: [
-    {h: "The effect of proportional action (P)", fig: "f1a", n: 3, qs: [
+    {num: 1, h: "The effect of proportional action (P)", fig: "f1a", n: 3, qs: [
       ["q1", "Comment on the effect of the proportional controller on the mass-spring-damper system in terms of both its dynamics and the steady-state output (recall that the desired output is 1)."],
-      ["q2", "Can you achieve the desired final value by increasing P? Give the exact steady-state values you found for P = 100 and P = 500 (Figure 1(b))."],
       ["q3", "What happens as P increases?"]]},
-    {h: "Large proportional gain (P = 100 and 500)", fig: "f1b", n: 2, qs: []},
-    {h: "The effect of integral action (I)", fig: "f1c", n: 3, qs: [
+    {num: 2, h: "Large proportional gain (P = 100 and 500)", fig: "f1b", n: 2, qs: [
+      ["q2", "Can you achieve the desired final value by increasing P? Give the exact steady-state values you found for P = 100 and P = 500."]]},
+    {num: 3, h: "The effect of integral action (I)", fig: "f1c", n: 3, qs: [
       ["q4", "What impact does the inclusion of I have on the final (steady-state) output?"],
       ["q5", "How does increasing I affect the response of the system?"]]},
-    {h: "The effect of derivative action (D)", fig: "f1d", n: 3, qs: [
+    {num: 4, h: "The effect of derivative action (D)", fig: "f1d", n: 3, qs: [
       ["q6", "What impact does the inclusion of D have on the final response?"]]},
-    {h: "Controller output with derivative action", fig: "f1d", what: "u", n: 3, qs: [
+    {num: 4, cont: true, h: "Controller output with derivative action", fig: "f1d", what: "u", n: 3, qs: [
       ["q6b", "Look at the controller output u(t) for figure 1(d). What happens to u just after t = 0 when D > 0, and why? Why would this be a problem for the fan of the rigs, whose drive is limited to 0–255?"]]},
-    {h: "Stability limit", fig: "f1e", n: 3, qs: [
-      ["q6c", "Which run of figure 1(e) is marginally stable, and how do the response and the pole map show it? Compare with your answer to pre-lab question p5."]]},
-    {h: "PID design", fig: "f1f", n: 1, qs: [
+    {num: 5, h: "Stability limit", fig: "f1e", n: 3, qs: [
+      ["q6c", "Which run of figure 1(e) is marginally stable, and how do the response and the pole map show it? Compare with your answer to pre-lab question P5."]]},
+    {num: 6, h: "PID design", fig: "f1f", n: 1, qs: [
       ["q6d", "Give your final P, I and D. Read from the plot (hover and zoom) the overshoot, the 2 % settling time and the final value, and show that the specification (overshoot < 10 %, settling time < 5 s, zero steady-state error) is met. Explain how you chose the gains, using the pole map."]]}]},
   {h: "Ex.2: Controlling a practical system: the balance beam", parts: [
-    {h: "Setpoint", go: "beamSP", qs: [["q7", "What setpoint (SETPOINT) value did you obtain for your level beam?"]]},
-    {h: "P only", fig: "f2a", n: 2, qs: [["q8", "Comment on the effect of changing P on the error signal (i.e. on achieving the desired output)."]]},
-    {h: "P only: why the error remains", fig: "f2a", what: "out", n: 2, qs: [
+    {num: 7, h: "Setpoint", go: "beamSP", qs: [["q7", "What setpoint (SETPOINT) value did you obtain for your level beam?"]]},
+    {num: 8, h: "P only", fig: "f2a", n: 2, qs: [["q8", "Comment on the effect of changing P on the error signal (i.e. on achieving the desired output)."]]},
+    {num: 8, cont: true, h: "P only: why the error remains", fig: "f2a", what: "out", n: 2, qs: [
       ["q8b", "For each P-only run, zoom into the last 20 s and note the mean error ē (error view) and the mean fan drive ū (fan PWM view). Compute P·ē and compare it with ū. Use this to explain why increasing P reduces, but cannot remove, the steady-state error on this rig."]]},
-    {h: "P and I", fig: "f2b", n: 2, qs: [["q9", "Comment on the effect of including I in the control system."]]}]},
+    {num: 9, h: "P and I", fig: "f2b", n: 2, qs: [["q9", "Comment on the effect of including I in the control system."]]}]},
   {h: "Ex.3: Controlling a practical system: the ball in a tube", parts: [
-    {h: "P and PI control", fig: "f3", n: 3, qs: [
+    {num: 10, h: "P and PI control", fig: "f3", n: 3, qs: [
       ["q10", "Comment on the effect of including I in the control system."],
       ["q11", "Comment on the differences between the last two sets of results, i.e. when P is varied while I is kept constant."],
-      ["q11b", "Compare the P-only run (P = 7) with your prediction in pre-lab question p7: did the ball reach the setpoint, and how large was the error? Use the fan PWM view to check the drive needed to keep the ball floating."]]}]},
+      ["q11b", "Compare the P-only run (P = 7) with your prediction in pre-lab question P7: did the ball reach the setpoint, and how large was the error? Use the fan PWM view to check the drive needed to keep the ball floating."]]}]},
 ];
 const repWhat = (id, w) => w || (FIGS[id].sim ? "y" : "err");
 function figStatus(id, n) {
@@ -1779,17 +1784,42 @@ function figStatus(id, n) {
   const what = FIGS[id].sim ? `${runs.length} output${runs.length === 1 ? "" : "s"} + input` : `${runs.length} error graph${runs.length === 1 ? "" : "s"}`;
   return `<span class="flag ${runs.length >= n ? "ok" : "no"}">${what} (${n} expected)</span>${emu ? '<span class="flag emu">contains emulator data</span>' : ""}`;
 }
+/* numbering of the report: pre-lab P1-P7; then 1, 2, ... with a), b), ... when a number has several questions */
+function reportItems() {
+  const perNum = {};
+  for (const sec of REPORT) for (const p of sec.parts) if (p.num) perNum[p.num] = (perNum[p.num] || 0) + p.qs.length;
+  const used = {};
+  return REPORT.map(sec => ({sec, parts: sec.parts.map(p => {
+    let head, sub = null, labels;
+    if (sec.pre) { head = p.h; labels = p.qs.map(([id]) => id.toUpperCase() + "."); }
+    else {
+      head = p.cont ? null : `${p.num}. ${p.h}${p.fig ? ` · Figure ${FIGS[p.fig].short.split(" ")[0]}` : ""}`;
+      if (p.cont) sub = p.h;
+      const many = perNum[p.num] > 1;
+      labels = p.qs.map(() => { used[p.num] = (used[p.num] || 0) + 1; return many ? String.fromCharCode(96 + used[p.num]) + ")" : ""; });
+    }
+    return {p, head, sub, labels};
+  })}));
+}
+function reportProgress() {
+  const figs = [...new Set(REPORT.flatMap(s => s.parts.map(p => p.fig)).filter(Boolean))];
+  const qs = REPORT.flatMap(s => s.parts.flatMap(p => p.qs.map(q => q[0])));
+  const nf = figs.filter(f => figDone(f)).length, nq = qs.filter(id => String(S.report.answers[id] || "").trim()).length;
+  $("rProg").innerHTML = `<b>Progress:</b> figures complete <span class="flag ${nf === figs.length ? "ok" : "no"}">${nf} / ${figs.length}</span>
+    questions answered <span class="flag ${nq === qs.length ? "ok" : "no"}">${nq} / ${qs.length}</span>`;
+}
 function buildReport() {
   if (S.beamSPmeasured != null && !S.report.answers.q7) S.report.answers.q7 = String(S.beamSPmeasured);
   $("rNames").value = S.report.names || ""; $("rDate").value = S.report.date || new Date().toISOString().slice(0, 10);
-  $("rBody").innerHTML = REPORT.map(sec => `<div class="card"><h2>${sec.h}</h2>` + sec.parts.map(p => `
-    <h3>${p.h}${p.fig ? " " + figStatus(p.fig, p.n) : ""}</h3>
+  $("rBody").innerHTML = reportItems().map(({sec, parts}) => `<div class="card"><h2>${sec.h}</h2>` + parts.map(({p, head, sub, labels}) => `
+    ${head ? `<h3>${head}${p.fig ? " " + figStatus(p.fig, p.n) : ""}</h3>` : `<h4>${sub}</h4>`}
     ${p.fig ? `<button class="b goto" data-go="${p.fig}" data-what="${p.what || ""}" title="Open this figure in its exercise tab, with the right plot, to look at it before answering">Go to figure ${FIGS[p.fig].short}${p.what ? ` (${goWhatName(p.fig, p.what)})` : ""} ›</button>` : ""}
     ${p.go ? `<button class="b goto" data-goel="${p.go}" title="Open the place in the exercise tab where this value is found">Go to the SETPOINT in Ex.2 ›</button>` : ""}
     ${p.fig ? (S.figs[p.fig].runs.length ? `<img class="figthumb" data-fig="${p.fig}" data-what="${p.what || ""}" alt="${FIGS[p.fig].title}">` : `<p class="hint">No runs yet in figure ${FIGS[p.fig].short}.</p>`) : ""}
-    ${p.qs.map(([id, q]) => `<div class="q"><p>${q}</p><textarea data-q="${id}">${esc(S.report.answers[id] || "")}</textarea></div>`).join("")}`).join("") + `</div>`).join("");
+    ${p.qs.map(([id, q], i) => `<div class="q"><p>${labels[i] ? `<span class="qn">${labels[i]}</span> ` : ""}${q}</p><textarea data-q="${id}">${esc(S.report.answers[id] || "")}</textarea></div>`).join("")}`).join("") + `</div>`).join("");
   $("rBody").querySelectorAll("img[data-fig]").forEach(img => img.src = figCanvas(img.dataset.fig, repWhat(img.dataset.fig, img.dataset.what), 1400, 760).toDataURL("image/png"));
-  $("rBody").querySelectorAll("textarea").forEach(t => t.oninput = () => { S.report.answers[t.dataset.q] = t.value; save(); });
+  $("rBody").querySelectorAll("textarea").forEach(t => t.oninput = () => { S.report.answers[t.dataset.q] = t.value; save(); reportProgress(); });
+  reportProgress();
   $("rBody").querySelectorAll("[data-go]").forEach(b => b.onclick = () => goFig(b.dataset.go, b.dataset.what, b));
   $("rBody").querySelectorAll("[data-goel]").forEach(b => b.onclick = () => { rememberReport(b); showTab("ex2"); $(b.dataset.goel).scrollIntoView({block: "center"}); $(b.dataset.goel).focus(); });
 }
@@ -1818,16 +1848,16 @@ function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": 
 function printReport() {
   const a = S.report.answers;
   let h = `<h1>EE114 Lab 4: Investigating PID Control · Report</h1><p><b>Names:</b> ${esc(S.report.names || "")}<br><b>Date:</b> ${esc(S.report.date || "")}</p>`;
-  for (const sec of REPORT) {
+  for (const {sec, parts} of reportItems()) {
     h += `<h2>${sec.h}</h2>`;
-    for (const p of sec.parts) {
-      h += `<h3>${p.h}</h3>`;
+    for (const {p, head, sub, labels} of parts) {
+      h += head ? `<h3>${head}</h3>` : `<h4>${sub}</h4>`;
       if (p.fig) {
         const runs = S.figs[p.fig].runs;
         h += runs.length ? `<div class="fig"><img src="${figCanvas(p.fig, repWhat(p.fig, p.what), 1600, 860).toDataURL("image/png")}"></div>` : `<p><i>Plot not attached.</i></p>`;
         if (runs.some(r => r.source === "emulator")) h += `<p><i>Note: this figure contains emulator runs.</i></p>`;
       }
-      for (const [id, q] of p.qs) h += `<p>${q}</p><div class="ans">${esc(a[id] || "")}</div>`;
+      p.qs.forEach(([id, q], i) => { h += `<p>${labels[i] ? `<b>${labels[i]}</b> ` : ""}${q}</p><div class="ans">${esc(a[id] || "")}</div>`; });
     }
   }
   $("print").innerHTML = h;

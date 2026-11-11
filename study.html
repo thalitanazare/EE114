@@ -80,6 +80,8 @@ details.log summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 pre.log { max-height: 180px; overflow: auto; background: #0f1720; color: #cde; font-size: 12px; padding: 8px; border-radius: 6px; margin: 6px 0 0; }
 .steps { margin: 4px 0 0 18px; padding: 0; } .steps li { margin: 3px 0; }
 .q { margin: 10px 0 14px; } .q p { margin: 0 0 4px; font-weight: 600; font-size: 14px; }
+.q .qn { display: inline-block; min-width: 2.2em; color: var(--accent); font-weight: 700; }
+#rBody h4 { margin: 14px 0 4px; font-size: 14px; color: #555; font-style: italic; }
 .figthumb { width: 100%; max-width: 860px; border: 1px solid var(--line); border-radius: 4px; }
 .flag { font-size: 12px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; }
 .flag.ok { background: #e3f4ea; color: var(--good); } .flag.no { background: #fde8e6; color: var(--bad); } .flag.emu { background: #fff1d6; color: var(--warn); }
@@ -272,7 +274,7 @@ const ED = EDITION.startsWith("__") ? "dev" : EDITION;
 const STUDY = ED !== "lab", LAB = ED !== "study";
 const STORE = "ee114-lab4-" + ED + "-v2";
 const $ = id => document.getElementById(id);
-const BUILD = "2026-11-11 14:55";
+const BUILD = "2026-11-11 15:02";
 $("edition").textContent = {lab: "Lab edition", study: "Study edition", dev: "Developer build"}[ED] + (BUILD.startsWith("__") ? "" : " · " + BUILD);
 $("edition").title = "Version of this page. If something does not work as described, reload the page (Ctrl+F5).";
 $("edition").className = "edition " + (ED === "lab" ? "lab" : "");
